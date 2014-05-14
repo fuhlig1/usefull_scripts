@@ -8,6 +8,7 @@ version=34
 version_full=3.4
 source_dir=/tmp/build_llvm/$version_full
 build_dir=/tmp/build_llvm/build/$version_full
+build_dir_stage2=/tmp/build_llvm/build/${version_full}_stage2
 tmpInstDir=/tmp/compiler_tmp/llvm/$version_full
 InstDir=/Users/uhlig/compiler/llvm/$version_full
 
@@ -133,7 +134,25 @@ EOF
   cd ../../../projects/
   if [ ! -d compiler-rt ]; then
     svn co http://llvm.org/svn/llvm-project/compiler-rt/tags/RELEASE_$version/final compiler-rt
+  patch -p0 << EOF
+--- compiler-rt/CMakeLists.txt_orig 2014-05-13 10:23:48.000000000 +0200
++++ compiler-rt/CMakeLists.txt 2014-05-13 10:24:11.000000000 +0200
+@@ -188,9 +188,9 @@
+     OUTPUT_STRIP_TRAILING_WHITESPACE
+   )
+   set(SANITIZER_COMMON_SUPPORTED_DARWIN_OS osx)
+-  if (IOSSIM_SDK_DIR)
+-    list(APPEND SANITIZER_COMMON_SUPPORTED_DARWIN_OS iossim)
+-  endif()
++#  if (IOSSIM_SDK_DIR)
++#    list(APPEND SANITIZER_COMMON_SUPPORTED_DARWIN_OS iossim)
++#  endif()
+ 
+   if(COMPILER_RT_USES_LIBCXX)
+     set(SANITIZER_MIN_OSX_VERSION 10.7)
+EOF
   fi
+  
   if [ ! -d libcxx ]; then
     svn co http://llvm.org/svn/llvm-project/libcxx/tags/RELEASE_$version/final libcxx
   fi
@@ -190,8 +209,6 @@ fi
 # http://dragoonsheir.wordpress.com/2013/03/16/wayland-and-c11-programming-part-1-of-n/
 
 
-set -xv
-
 if [ ! -f $InstDir/lib/$cxxabi_checkfile ]; then
   cd $source_dir
   mkdir -p libc++
@@ -222,42 +239,69 @@ if [ ! -f $InstDir/lib/$cxxabi_checkfile ]; then
   fi
 fi
 
-set +xv
-
 # Now we can recompile clang using the temporary clang and the lbcxxabi
 if [ ! -f $InstDir/bin/clang ]; 
 then
-  cd $build_dir
-  rm -rf *
-  echo "InstallDir: $InstDir"
-  ls -la  $InstDir/lib
+  mkdir $build_dir_stage2
+  cd $build_dir_stage2
+#  rm -rf *
+#  echo "InstallDir: $InstDir"
+#  ls -la  $InstDir/lib
+  
   export LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-  export LD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-
+  if [ "$arch" = "linux" ];
+  then
+    export LD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
+  fi
+#  elif [ "$arch" = "darwin" ];
+#  then
+#    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
+#  fi
+  
   # extract the correct C_INCLUDE_DIRS
-  gccIncDir=$(gcc -print-multiarch)
-  cIncDirs=/usr/include/$gccIncDir:/usr/include:$InstDir/include/c++/v1
-
+  if [ "$arch" = "linux" ];
+  then
+    gccIncDir=$(gcc -print-multiarch)
+    cIncDirs=/usr/include/$gccIncDir:/usr/include:$InstDir/include/c++/v1
+  elif [ "$arch" = "darwin" ];
+  then
+    cIncDirs=/usr/include:$InstDir/include/c++/v1
+  fi
+  
+  env
   CC=$tmpInstDir/bin/clang CXX=$tmpInstDir/bin/clang++ \
-  CXXFLAGS="-std=c++11 -stdlib=libc++ -I $tmpInstDir/include/c++/v1/" \
-  LDFLAGS="-L $tmpInstDir/lib -L $InstDir/lib -lc++abi" \
+  CXXFLAGS="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" \
+  LDFLAGS="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" \
   cmake $source_dir/llvm/$version \
         -DCMAKE_INSTALL_PREFIX=$InstDir \
         -DLIBCXX_CXX_ABI=libcxxabi \
         -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$InstDir/include/cxxabi \
         -DC_INCLUDE_DIRS=$cIncDirs 
-#        -DLLVM_ENABLE_ASSERTIONS=on -DLLVM_EXTERNAL_CLANG_BUILD=on -DLLVM_EXTERNAL_LIBCXX_BUILD=on -DLLVM_EXTERNAL_COMPILER_RT_BUILD=off 
   make -j$ncpu
   make install
 
+  if [ ! -f bin/clang ]; 
+  then
+    exit
+  fi
+
+  mkdir -p $InstDir/bin     
+  cp -r $source_dir/llvm/$version/tools/clang/tools/scan-view $InstDir/bin
+  cp -r $source_dir/llvm/$version/tools/clang/tools/scan-build $InstDir/bin
   # create symbolic links for cc and c++ 
   cd $InstDir/bin
   ln -s clang cc
   ln -s clang++ c++
 fi
 
-export LIBRARY_PATH=$InstDir/lib:$LIBRARY_PATH
-export LD_LIBRARY_PATH=$InstDir/lib:$LD_LIBRARY_PATH
+export LIBRARY_PATH=$InstDir/lib
+if [ "$arch" = "linux" ];
+then
+  export LD_LIBRARY_PATH=$InstDir/lib
+#elif [ "$arch" = "darwin" ];
+#then
+#  export DYLD_LIBRARY_PATH=$InstDir/lib
+fi
 
 if [ ! -f $InstDir/bin/oclint ]; 
 then
@@ -265,10 +309,20 @@ then
   git clone https://github.com/oclint/oclint
   cd oclint
   git checkout release_08
-  sed 's/libstdc++/libc++/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
-
+  
+  if [ "$arch" = "linux" ];
+  then
+    sed 's/libstdc++/libc++/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
+    ld_flags="" 
+  elif [ "$arch" = "darwin" ];
+  then
+    ld_flags="-L$InstDir/lib -lc++abi" 
+#    ld_flags="-lc++abi" 
+  fi
+  
   mkdir -p build/oclint-core
   cd build/oclint-core
+  LDFLAGS=$ld_flags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -279,6 +333,7 @@ then
   cd $source_dir/oclint/build
   mkdir -p oclint-metrics
   cd oclint-metrics
+  LDFLAGS=$ld_flags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -290,6 +345,7 @@ then
   mkdir -p oclint-rules
   cd oclint-rules
   echo "DIR: $source_dir/oclint/oclint-rules"
+  LDFLAGS=$ld_flags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -304,6 +360,7 @@ then
   cd $source_dir/oclint/build
   mkdir -p oclint-reporters
   cd oclint-reporters
+  LDFLAGS=$ld_flags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -316,6 +373,7 @@ then
   cd $source_dir/oclint/build
   mkdir -p oclint-driver
   cd oclint-driver
+  LDFLAGS=$ld_flags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -323,12 +381,12 @@ then
         -D OCLINT_BUILD_DIR=$source_dir/oclint/build/oclint-core \
         -D OCLINT_SOURCE_DIR=$source_dir/oclint/oclint-core \
         $source_dir/oclint/oclint-driver
-  make -j$ncpu
+  make VERBOSE=1
 
   mkdir -p $InstDir/lib/oclint/reporters
-  cp $source_dir/oclint/build/oclint-reporters/reporters.dl/*.so $InstDir/lib/oclint/reporters
+  cp $source_dir/oclint/build/oclint-reporters/reporters.dl/*.$ext $InstDir/lib/oclint/reporters
   mkdir -p $InstDir/lib/oclint/rules
-  cp $source_dir/oclint/build/oclint-rules/rules.dl/*.so $InstDir/lib/oclint/rules
+  cp $source_dir/oclint/build/oclint-rules/rules.dl/*.$ext $InstDir/lib/oclint/rules
   cp $source_dir/oclint/build/oclint-driver/bin/oclint-0.8 $InstDir/bin
   ln -s $InstDir/bin/oclint-0.8 $InstDir/bin/oclint
   cd $source_dir/oclint/
