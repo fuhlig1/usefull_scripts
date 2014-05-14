@@ -105,14 +105,26 @@ if [ ! -d $version ]; then
   svn co http://llvm.org/svn/llvm-project/llvm/tags/RELEASE_$version/final $version
 fi
 
-cd $version/tools/
+cd $source_dir/llvm/$version/tools
 if [ ! -d clang ]; then
   svn co http://llvm.org/svn/llvm-project/cfe/tags/RELEASE_$version/final clang
 fi
 
+cd $source_dir/llvm/$version/projects
+if [ "$bootstrap" = "yes" ];
+then
+  if [ ! -d libcxx ]; then
+    svn co http://llvm.org/svn/llvm-project/libcxx/branches/release_$version libcxx
+  fi
+else  
+  if [ ! -d libcxx ]; then
+    svn co http://llvm.org/svn/llvm-project/libcxx/tags/RELEASE_$version/final libcxx
+  fi
+fi 
+
 if [ "$bootstrap" = "no" ];
 then 
-  cd clang/tools/
+  cd $source_dir/llvm/$version/tools/clang/tools/
   if [ ! -d  extra ]; then
     svn co http://llvm.org/svn/llvm-project/clang-tools-extra/branches/release_$version extra
   fi
@@ -131,7 +143,7 @@ then
 EOF
   fi
 
-  cd ../../../projects/
+  cd $source_dir/llvm/$version/projects
   if [ ! -d compiler-rt ]; then
     svn co http://llvm.org/svn/llvm-project/compiler-rt/tags/RELEASE_$version/final compiler-rt
   patch -p0 << EOF
@@ -153,10 +165,6 @@ EOF
 EOF
   fi
   
-  if [ ! -d libcxx ]; then
-    svn co http://llvm.org/svn/llvm-project/libcxx/tags/RELEASE_$version/final libcxx
-  fi
-
 fi
 
 # test for architecture
@@ -171,6 +179,7 @@ then
   cxxabi_checkfile=libc++abi.$ext.1.0
 elif [ "$arch" = "darwin" ];
 then
+  mac_version=$(sw_vers -productVersion | cut -d . -f 1-2)
   ncpu=$(sysctl -n hw.ncpu)
   triple=-apple-
   ext=dylib
@@ -181,9 +190,33 @@ fi
 if [ ! -f $tmpInstDir/bin/clang ]; then
   mkdir -p $build_dir
   cd $build_dir
-  cmake $source_dir/llvm/$version -DCMAKE_INSTALL_PREFIX=$tmpInstDir
-  make -j$ncpu
-# somehow the compilation of some tests crash due to inconsistent?? libstdc++  
+  if [ "$bootstrap" = "yes" ];
+  then 
+    if [ "$mac_version" = "10.6" ];
+    then
+      cxxflags="-U__STRICT_ANSI__"  
+    fi
+  else 
+    if [ "$mac_version" = "10.6" ];
+    then
+      cxxflags="-U__STRICT_ANSI__ -I$cxxabi_include_path"  
+      ldflags="-L$cxxabi_lib_path -lc++abi"
+      cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path"   
+      export libcxxabi_install_dir="$cxxabi_lib_path"
+      export libcxx_install_dir="$tmpInstDir"
+#      sed 's#/usr/lib/libc++.1.dylib#$ENV{libcxx_install_path}/lib/libc++.1.dylib#g' -i' ' $source_dir/llvm/$version/projects/libcxx/lib/CMakeLists.txt
+#      sed 's#/usr/lib/libc++abi.dylib#$ENV{libcxxabi_install_path}/libc++abi.dylib#g' -i' ' $source_dir/llvm/$version/projects/libcxx/lib/CMakeLists.txt
+    fi
+  fi
+
+  echo "BLA"
+  echo $libcxxabi_install_dir
+  echo $libcxx_install_dir
+  CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
+    cmake $source_dir/llvm/$version -DCMAKE_INSTALL_PREFIX=$tmpInstDir $cmakeflags
+ 
+  make -j$ncpu 
+  # somehow the compilation of some tests crash due to inconsistent?? libstdc++  
 # package g++-multilib was missing, so the tests for 32bit executables couldn't be
 # compiled  
 #  make check-all -j16
@@ -200,16 +233,20 @@ then
   export PATH=$tmpInstDir/bin:$PATH
   export CC=$tmpInstDir/bin/clang
   export CXX=$tmpInstDir/bin/clang++
-  $script_dir/build_clang.sh  
-  exit
 fi
 
 # compile libcxxabi which is needed for a standalone version of libc++
 # information taken from
 # http://dragoonsheir.wordpress.com/2013/03/16/wayland-and-c11-programming-part-1-of-n/
 
+if [ "$bootstrap" = "yes" ];
+then 
+  InstDirTmp=$tmpInstDir
+else
+  InstDirTmp=$InstDir
+fi
 
-if [ ! -f $InstDir/lib/$cxxabi_checkfile ]; then
+if [ ! -f $InstDirTmp/lib/$cxxabi_checkfile ]; then
   cd $source_dir
   mkdir -p libc++
   cd libc++
@@ -218,25 +255,39 @@ if [ ! -f $InstDir/lib/$cxxabi_checkfile ]; then
   svn co -r 200202 http://llvm.org/svn/llvm-project/libcxxabi/trunk libcxxabi
   cd libcxxabi/lib
 
-    CC=$tmpInstDir/bin/clang CXX=$tmpInstDir/bin/clang++ \
-    CPATH=$tmpInstDir/include/c++/v1 LIBRARY_PATH=$tmpInstDir/lib \
-    TRIPLE=$triple ./buildit
+  if [ "$arch" = "darwin" ];
+  then
+    sed 's#-install_name /usr/lib/libc++abi.dylib#-install_name $InstDirTmp/lib/libc++abi.dylib#g' -i' ' buildit  
+  fi    
+        
+  InstDirTmp=$InstDirTmp CC=$tmpInstDir/bin/clang CXX=$tmpInstDir/bin/clang++ \
+  CPATH=$source_dir/llvm/$version/projects/libcxx/include LIBRARY_PATH=$tmpInstDir/lib \
+  TRIPLE=$triple ./buildit
   
   if [ ! -f $cxxabi_checkfile ]; then
     exit
   fi  
 
-  mkdir -p $InstDir/include/cxxabi
-  cp -r ../include/* $InstDir/include/cxxabi
-  
-  mkdir -p $InstDir/lib
-  cp  $cxxabi_checkfile $InstDir/lib
+  mkdir -p $InstDirTmp/include/cxxabi
+  cp -r ../include/* $InstDirTmp/include/cxxabi
+ 
+  mkdir -p $InstDirTmp/lib
+  cp  $cxxabi_checkfile $InstDirTmp/lib
   if [ "$arch" = "linux" ];
   then
-    cd $InstDir/lib
+    cd $InstDirTmp/lib
     ln -s libc++abi.$ext.1.0 libc++abi.$ext.1
     ln -s libc++abi.$ext.1 libc++abi.$ext
   fi
+fi
+
+if [ "$bootstrap" = "yes" ];
+then 
+  echo "Now we will build the final version of clang"
+  export cxxabi_include_path=$InstDirTmp/include/cxxabi
+  export cxxabi_lib_path=$InstDirTmp/lib
+  $script_dir/build_clang.sh  
+  exit
 fi
 
 # Now we can recompile clang using the temporary clang and the lbcxxabi
