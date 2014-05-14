@@ -8,7 +8,7 @@
 # at least change the installation directory
 tmpInstDir=/tmp/compiler/gcc/
 sourceDir=/tmp/build_gcc/
-instDir=/data.local1/uhlig/compiler/gcc/
+instDir=/Users/uhlig/compiler/gcc/
 
 # basic definitions
 # change the values if needed 
@@ -121,13 +121,13 @@ ln -s $instDir/bin/g++ $instDir/bin/c++
 # At runtime the LD_LIBRARY_PATH environment variable need to be present and have to point to $InstDir/lib 
 echo "To use the new gcc as compiler you have to add the following lines to your environment"
 echo "###"
-echo " export PATH=$InstDir/bin:\$PATH"
-echo " export LD_LIBRARY_PATH=$InstDir/lib64:\$LD_LIBRARY_PATH"
+echo " export PATH=$instDir/bin:\$PATH"
+echo " export LD_LIBRARY_PATH=$instDir/lib64:\$LD_LIBRARY_PATH"
 echo "###"
 echo "To use the new gcc as default compiler you can add also the following lines"
 echo "###"
-echo " export CC=$InstDir/bin/gcc"
-echo " export CXX=$InstDir/bin/g++"
+echo " export CC=$instDir/bin/gcc"
+echo " export CXX=$instDir/bin/g++"
 echo "###"
 
 
