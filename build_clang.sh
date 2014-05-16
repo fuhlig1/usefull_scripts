@@ -303,7 +303,20 @@ then
   if [ "$arch" = "linux" ];
   then
     export LD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-  fi
+    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
+    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
+  elif [ "$arch" = "darwin" ];
+  then
+    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
+    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
+    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
+    if [ "$mac_version" = "10.6" ];
+    then
+      export libcxxabi_install_dir="$InstDir/lib"
+      export libcxx_install_dir="$InstDir"
+      cxxflags="$cxxflags -U__STRICT_ANSI__"  
+    fi
+  fi  
 #  elif [ "$arch" = "darwin" ];
 #  then
 #    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
@@ -320,15 +333,17 @@ then
   fi
   
   env
+  echo "BLA"
+  echo $libcxxabi_install_dir
+  echo $libcxx_install_dir
   CC=$tmpInstDir/bin/clang CXX=$tmpInstDir/bin/clang++ \
-  CXXFLAGS="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" \
-  LDFLAGS="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" \
+  CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
   cmake $source_dir/llvm/$version \
         -DCMAKE_INSTALL_PREFIX=$InstDir \
         -DLIBCXX_CXX_ABI=libcxxabi \
         -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$InstDir/include/cxxabi \
         -DC_INCLUDE_DIRS=$cIncDirs 
-  make -j$ncpu
+  make VERBOSE=1 -j$ncpu
   make install
 
   if [ ! -f bin/clang ]; 
@@ -349,10 +364,16 @@ export LIBRARY_PATH=$InstDir/lib
 if [ "$arch" = "linux" ];
 then
   export LD_LIBRARY_PATH=$InstDir/lib
-#elif [ "$arch" = "darwin" ];
-#then
-#  export DYLD_LIBRARY_PATH=$InstDir/lib
-fi
+elif [ "$arch" = "darwin" ];
+then
+  if [ "$mac_version" = "10.6" ];
+  then
+    export DYLD_LIBRARY_PATH=$InstDir/lib
+    export libcxxabi_install_dir="$InstDir/lib"
+    export libcxx_install_dir="$InstDir"
+    cxxflags="-U__STRICT_ANSI__"  
+  fi
+fi  
 
 if [ ! -f $InstDir/bin/oclint ]; 
 then
@@ -367,24 +388,30 @@ then
     ld_flags="" 
   elif [ "$arch" = "darwin" ];
   then
-    ld_flags="-L$InstDir/lib -lc++abi" 
+    if [ "$mac_version" = "10.6" ];
+    then
+      sed 's/-fPIC"/-fPIC -U__STRICT_ANSI__"/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
+      sed "s|\${OSX_DEVELOPER_ROOT}/Toolchains/XcodeDefault.xctoolchain/usr/lib|$InstDir/include|g" -i'' oclint-core/cmake/OCLintConfig.cmake
+      ld_flags="-L$InstDir/lib -lc++abi" 
 #    ld_flags="-lc++abi" 
+    fi
   fi
-  
+
+  echo $cxxflags  
   mkdir -p build/oclint-core
   cd build/oclint-core
-  LDFLAGS=$ld_flags \
+  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
         -D LLVM_ROOT=$InstDir \
         $source_dir/oclint/oclint-core
-  make -j$ncpu
+  make VERBOSE=1
 
   cd $source_dir/oclint/build
   mkdir -p oclint-metrics
   cd oclint-metrics
-  LDFLAGS=$ld_flags \
+  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -396,7 +423,7 @@ then
   mkdir -p oclint-rules
   cd oclint-rules
   echo "DIR: $source_dir/oclint/oclint-rules"
-  LDFLAGS=$ld_flags \
+  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -411,7 +438,7 @@ then
   cd $source_dir/oclint/build
   mkdir -p oclint-reporters
   cd oclint-reporters
-  LDFLAGS=$ld_flags \
+  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -424,7 +451,7 @@ then
   cd $source_dir/oclint/build
   mkdir -p oclint-driver
   cd oclint-driver
-  LDFLAGS=$ld_flags \
+  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
   cmake -D OCLINT_BUILD_TYPE=Release \
         -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
         -D CMAKE_C_COMPILER=$InstDir/bin/clang \
