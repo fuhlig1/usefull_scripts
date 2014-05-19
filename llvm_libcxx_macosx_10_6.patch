@@ -1,0 +1,11 @@
+--- projects/libcxx/lib/CMakeLists.txt_orig 2014-05-19 16:06:18.000000000 +0200
++++ projects/libcxx/lib/CMakeLists.txt	2014-05-19 16:06:30.000000000 +0200
+@@ -86,7 +86,7 @@
+       "-compatibility_version 1"
+       "-install_name ${LIBCXX_INSTALL_PATH}/libc++.1.dylib"
+       "-Wl,-unexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/libc++unexp.exp"
+-      "${OSX_RE_EXPORT_LINE}"
++#      "${OSX_RE_EXPORT_LINE}"
+       "-Wl,-force_symbols_not_weak_list,${CMAKE_CURRENT_SOURCE_DIR}/notweak.exp"
+       "-Wl,-force_symbols_weak_list,${CMAKE_CURRENT_SOURCE_DIR}/weak.exp")
+   endif()

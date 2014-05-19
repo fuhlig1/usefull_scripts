@@ -1,0 +1,15 @@
+--- projects/compiler-rt/CMakeLists.txt_orig 2014-05-13 10:23:48.000000000 +0200
++++ projects/compiler-rt/CMakeLists.txt 2014-05-13 10:24:11.000000000 +0200
+@@ -188,9 +188,9 @@
+     OUTPUT_STRIP_TRAILING_WHITESPACE
+   )
+   set(SANITIZER_COMMON_SUPPORTED_DARWIN_OS osx)
+-  if (IOSSIM_SDK_DIR)
+-    list(APPEND SANITIZER_COMMON_SUPPORTED_DARWIN_OS iossim)
+-  endif()
++#  if (IOSSIM_SDK_DIR)
++#    list(APPEND SANITIZER_COMMON_SUPPORTED_DARWIN_OS iossim)
++#  endif()
+ 
+   if(COMPILER_RT_USES_LIBCXX)
+     set(SANITIZER_MIN_OSX_VERSION 10.7)
