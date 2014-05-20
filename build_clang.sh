@@ -369,9 +369,9 @@ build_stage2() {
 
 
 #  cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/ -U__STRICT_ANSI__" 
-  cxxflags="-std=c++11 -stdlib=libc++ -nostdinc++ -U__STRICT_ANSI__" 
+  cxxflags="-std=c++11 -stdlib=libc++ -U__STRICT_ANSI__" 
 #  ldflags="-L$tmpInstDir/lib -L$InstDir/lib -Wl,-rpath,$InstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi" 
-  ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi" 
+  ldflags="-L$tmpInstDir/lib -lc++ -L$InstDir/lib -Wl,-rpath,$InstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi" 
   
   cIncDirs=$InstDir/include/c++/v1:/usr/include
 
