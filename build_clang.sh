@@ -28,24 +28,24 @@ main() {
 
   check_architecture
   check_compiler
+  bootstrap_settings
   if [ "$bootstrap" = "yes" ];
   then 
-    version_final=$version
-    version_full_final=$version_full
-    bootstrap_settings
     download_llvm_core
     build_pre_stage1
-    cc=$tmpInstDir/bin/clang
-    cxx=$tmpInstDir/bin/clang
-    build_cxxabi 
-    version=$version_final
-    version_full=$version_full_final
-  fi 
-  final_settings
+  fi
+  stage1_settings
+
   download_llvm_core
   download_llvm_addons
+  patch_llvm
+
+  build_cxxabi 
   build_stage1 
-#  build_stage2
+
+  stage2_settings
+  build_cxxabi 
+  build_stage2
   exit
 
 }
@@ -77,24 +77,44 @@ usage() {
   exit 0
 }
 
-final_settings() {
+stage2_settings() {
+  cc=$tmpInstDir/bin/clang
+  cxx=$tmpInstDir/bin/clang  
+  source_dir=$tmpDir/$version_full
+#  build_dir=$tmpDir/build/$version_full
+  build_dir=$tmpDir/build/${version_full}_stage2
+  tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
+  InstDir=$InstDirBackup/$version_full
+  cxxabi_include_path=$InstDir/include/cxxabi
+  cxxabi_lib_path=$InstDir/lib
+}
+
+stage1_settings() {
+  version=$version_final
+  version_full=$version_full_final
+  cc=$tmpInstDir/bin/clang
+  cxx=$tmpInstDir/bin/clang
   source_dir=$tmpDir/$version_full
   build_dir=$tmpDir/build/$version_full
-  build_dir_stage2=$tmpDir/build/${version_full}_stage2
+#  build_dir_stage2=$tmpDir/build/${version_full}_stage2
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
-  InstDir=$InstDir/$version_full
+#  InstDir=$InstDirBackup/$version_full
+  InstDir=$tmpInstDir
+  cxxabi_include_path=$InstDir/include/cxxabi
+  cxxabi_lib_path=$InstDir/lib
 }
 
 # Define directories for bootstrap installation
 bootstrap_settings() {
+  InstDirBackup=$InstDir
+  version_final=$version
+  version_full_final=$version_full
   local version_tmp=32
   local version_tmp_full=3.2
   source_dir=$tmpDir/$version_tmp_full
   build_dir=$tmpDir/build/$version_tmp_full
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_tmp_full
   InstDir=$tmpInstDir
-  cxxabi_include_path=$InstDir/include/cxxabi
-  cxxabi_lib_path=$InstDir/lib
   echo "So we will first build clang/llvm $version_tmp_full and use this version to compile the final clang/llvm version $version_full."
   version=32
   version_full=3.2
@@ -142,6 +162,8 @@ check_compiler() {
   local major
   if [ "$compiler" = "clang" ];
   then
+    cc=clang
+    cxx=clang++
     compiler_version=$(clang -v 2>&1 | sed -n 1p | cut -d' ' -f 3)
     if [ "$compiler_version" = "version" ]; # we are on mac
     then
@@ -150,6 +172,8 @@ check_compiler() {
     major=$(echo $compiler_version | cut -d. -f1 ) 
     minor=$(echo $compiler_version | cut -d. -f2) 
   else
+    cc=gcc
+    cxx=g++
     compiler_version=$(gcc -dumpversion)
     major=$(echo $compiler_version | cut -d. -f1 ) 
     minor=$(echo $compiler_version | cut -d. -f2) 
@@ -248,11 +272,12 @@ download_llvm_addons() {
 }
 
 build_llvm() {
-  set -xv
+  echo "CC: $cc"
+  echo "CXX: $cxx"
+  CC=$cc CXX=$cxx \
   CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
   cmake $source_dir/llvm/$version \
     -DCMAKE_INSTALL_PREFIX=$tmpInstDir $cmakeflags
- set +xv
 
   make -j$ncpu 
   make install
@@ -271,11 +296,88 @@ build_pre_stage1() {
     if [ "$mac_version" = "10.6" ];
     then
       cxxflags="-U__STRICT_ANSI__"  
-      ldflags=""
-      cmakeflags=""
+      ldflags="-Wl,-rpath,$tmpInstDir/lib"
+      cIncDirs=$tmpInstDir/include/c++/v1:/usr/include 
+      cmakeflags="-DC_INCLUDE_DIRS=$cIncDirs"
     fi
     build_llvm
   fi
+}
+
+patch_llvm() {
+  if [ ! -f $source_dir/llvm/$version/patched ]; then
+    cd $source_dir/llvm/$version/
+    patch -p0 < $script_dir/llvm_core.patch
+    patch -p0 < $script_dir/llvm_addons.patch
+    patch -p0 < $script_dir/llvm_libcxx_macosx.patch
+
+    if [ "$mac_version" = "10.6" ];
+    then
+      patch -p0 < $script_dir/llvm_libcxx_macosx_10_6.patch
+    fi
+    touch $source_dir/llvm/$version/patched
+  fi
+}
+
+build_stage1() {
+  if [ ! -f $tmpInstDir/bin/clang ]; then
+
+#    cd $source_dir/llvm/$version/
+#    patch -p0 < $script_dir/llvm_core.patch
+#    patch -p0 < $script_dir/llvm_addons.patch
+#    patch -p0 < $script_dir/llvm_libcxx_macosx.patch
+
+    if [ "$mac_version" = "10.6" ];
+    then
+#      patch -p0 < $script_dir/llvm_libcxx_macosx_10_6.patch
+      cxxflags="-U__STRICT_ANSI__ -stdlib=libstdc++"
+#      ldflags="-L$cxxabi_lib_path -lc++abi -lstdc++"
+      ldflags="-L$cxxabi_lib_path -Wl,-rpath,$tmpInstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi -lstdc++"
+      cIncDirs=$tmpInstDir/include/c++/v1:/usr/include 
+      cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib -DC_INCLUDE_DIRS=$cIncDirs"   
+    fi
+    mkdir -p $build_dir
+    cd $build_dir
+#    echo "CC: $CC"
+#    echo "CXX: $CXX"
+    build_llvm
+  fi  
+}
+
+build_stage2() {
+
+  mkdir $build_dir
+  cd $build_dir
+  
+#  export LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
+  if [ "$arch" = "linux" ];
+  then
+#    export LD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
+    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
+    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
+  elif [ "$arch" = "darwin" ];
+  then
+#    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
+    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
+    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
+    ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib -lc++abi" 
+    if [ "$mac_version" = "10.6" ];
+    then
+      cxxflags="$cxxflags -U__STRICT_ANSI__"  
+    fi
+  fi  
+
+
+#  cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/ -U__STRICT_ANSI__" 
+  cxxflags="-std=c++11 -stdlib=libc++ -nostdinc++ -U__STRICT_ANSI__" 
+#  ldflags="-L$tmpInstDir/lib -L$InstDir/lib -Wl,-rpath,$InstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi" 
+  ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi" 
+  
+  cIncDirs=$InstDir/include/c++/v1:/usr/include
+
+  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib -DC_INCLUDE_DIRS=$cIncDirs"   
+
+  build_llvm 
 }
 
 # compile libcxxabi which is needed for a standalone version of libc++
@@ -283,9 +385,9 @@ build_pre_stage1() {
 # http://dragoonsheir.wordpress.com/2013/03/16/wayland-and-c11-programming-part-1-of-n/
 build_cxxabi() {
   if [ ! -f $InstDir/lib/$cxxabi_checkfile ]; then
-    cd $source_dir
-    mkdir -p libc++
-    cd libc++
+
+    mkdir -p $source_dir/libc++
+    cd $source_dir/libc++
 
     svn co -r 200202 http://llvm.org/svn/llvm-project/libcxxabi/trunk libcxxabi
     cd libcxxabi/lib
@@ -295,12 +397,11 @@ build_cxxabi() {
       sed 's#-install_name /usr/lib/libc++abi.dylib#-install_name $InstDir/lib/libc++abi.dylib#g' -i' ' buildit  
     fi    
 
-    ls -la $source_dir/llvm/$version/projects/libcxx/include
     InstDir=$InstDir \
       CC=$cc CXX=$cxx \
       CPATH=$source_dir/llvm/$version/projects/libcxx/include \
-      Library_PATH=$tmpInstDir/lib \
       TRIPLE=$triple ./buildit
+
   
     if [ ! -f $cxxabi_checkfile ]; then
       exit
@@ -318,31 +419,6 @@ build_cxxabi() {
       ln -s libc++abi.$ext.1 libc++abi.$ext
     fi
   fi
-}
-
-build_stage1() {
-  if [ ! -f $tmpInstDir/bin/clang ]; then
-    cd $source_dir/llvm/$version/
-    patch -p0 < $script_dir/llvm_core.patch
-    patch -p0 < $script_dir/llvm_addons.patch
-    patch -p0 < $script_dir/llvm_libcxx_macosx.patch
-    if [ "$mac_version" = "10.6" ];
-    then
-      patch -p0 < $script_dir/llvm_libcxx_macosx_10_6.patch
-      cxxflags="-U__STRICT_ANSI__"
-      ldflags="-L$cxxabi_lib_path"
-#      cxxflags="-U__STRICT_ANSI__ -I$cxxabi_include_path"  
-#      ldflags="-L$cxxabi_lib_path -lc++abi"
-      cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib"   
-    fi
-    mkdir -p $build_dir
-    cd $build_dir
-    export CC=$cc 
-    export CXX=$cxx 
-    echo "CC: $CC"
-    echo "CXX: $CXX"
-    build_llvm
-  fi  
 }
 
 main "$@"
