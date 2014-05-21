@@ -34,8 +34,8 @@ main() {
     download_llvm_core
     build_pre_stage1
   fi
+   
   stage1_settings
-
   download_llvm_core
   download_llvm_addons
   patch_llvm
@@ -81,12 +81,23 @@ stage2_settings() {
   cc=$tmpInstDir/bin/clang
   cxx=$tmpInstDir/bin/clang  
   source_dir=$tmpDir/$version_full
-#  build_dir=$tmpDir/build/$version_full
   build_dir=$tmpDir/build/${version_full}_stage2
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$InstDirBackup/$version_full
   cxxabi_include_path=$InstDir/include/cxxabi
   cxxabi_lib_path=$InstDir/lib
+  if [ "$mac_version" = "10.6" ];
+  then
+    cxxflags="-std=c++11 -stdlib=libc++ -U__STRICT_ANSI__" 
+#  ldflags="-L$tmpInstDir/lib -L$InstDir/lib -Wl,-rpath,$InstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi" 
+    ldflags="-L$tmpInstDir/lib -lc++ -L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
+  
+    cIncDirs=$InstDir/include/c++/v1:/usr/include
+
+    cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib -DC_INCLUDE_DIRS=$cIncDirs"   
+#    export LIBRARY_PATH=$tmpInstDir/lib:$LIBRARY_PATH
+#    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
+  fi
 }
 
 stage1_settings() {
@@ -96,12 +107,18 @@ stage1_settings() {
   cxx=$tmpInstDir/bin/clang
   source_dir=$tmpDir/$version_full
   build_dir=$tmpDir/build/$version_full
-#  build_dir_stage2=$tmpDir/build/${version_full}_stage2
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
-#  InstDir=$InstDirBackup/$version_full
   InstDir=$tmpInstDir
   cxxabi_include_path=$InstDir/include/cxxabi
   cxxabi_lib_path=$InstDir/lib
+  if [ "$mac_version" = "10.6" ];
+  then
+    cxxflags="-U__STRICT_ANSI__ -stdlib=libstdc++"
+#    ldflags="-L$cxxabi_lib_path -Wl,-rpath,$tmpInstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi -lstdc++"
+    ldflags="-L$cxxabi_lib_path -Wl,-rpath,$tmpInstDir/lib  -lstdc++"
+    cIncDirs=$tmpInstDir/include/c++/v1:/usr/include 
+    cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib -DC_INCLUDE_DIRS=$cIncDirs"   
+  fi
 }
 
 # Define directories for bootstrap installation
@@ -118,6 +135,13 @@ bootstrap_settings() {
   echo "So we will first build clang/llvm $version_tmp_full and use this version to compile the final clang/llvm version $version_full."
   version=32
   version_full=3.2
+  if [ "$mac_version" = "10.6" ];
+  then
+    cxxflags="-U__STRICT_ANSI__"  
+    ldflags="-Wl,-rpath,$tmpInstDir/lib"
+    cIncDirs=$tmpInstDir/include/c++/v1:/usr/include 
+    cmakeflags="-DC_INCLUDE_DIRS=$cIncDirs"
+  fi
   sleep 2
 }
 
@@ -277,7 +301,7 @@ build_llvm() {
   CC=$cc CXX=$cxx \
   CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
   cmake $source_dir/llvm/$version \
-    -DCMAKE_INSTALL_PREFIX=$tmpInstDir $cmakeflags
+    -DCMAKE_INSTALL_PREFIX=$InstDir $cmakeflags
 
   make -j$ncpu 
   make install
@@ -289,19 +313,19 @@ build_llvm() {
 }
 
 build_pre_stage1() {
- 
+   if [ ! -f $tmpInstDir/bin/clang ]; then
+    mkdir -p $build_dir
+    cd $build_dir
+    build_llvm
+  fi
+}
+
+build_stage1() {
   if [ ! -f $tmpInstDir/bin/clang ]; then
     mkdir -p $build_dir
     cd $build_dir
-    if [ "$mac_version" = "10.6" ];
-    then
-      cxxflags="-U__STRICT_ANSI__"  
-      ldflags="-Wl,-rpath,$tmpInstDir/lib"
-      cIncDirs=$tmpInstDir/include/c++/v1:/usr/include 
-      cmakeflags="-DC_INCLUDE_DIRS=$cIncDirs"
-    fi
     build_llvm
-  fi
+  fi  
 }
 
 patch_llvm() {
@@ -313,71 +337,41 @@ patch_llvm() {
 
     if [ "$mac_version" = "10.6" ];
     then
-      patch -p0 < $script_dir/llvm_libcxx_macosx_10_6.patch
+      patch -p0 < $script_dir/llvm_libcxx_macosx_10_6_1.patch
     fi
     touch $source_dir/llvm/$version/patched
   fi
 }
 
-build_stage1() {
-  if [ ! -f $tmpInstDir/bin/clang ]; then
-
-#    cd $source_dir/llvm/$version/
-#    patch -p0 < $script_dir/llvm_core.patch
-#    patch -p0 < $script_dir/llvm_addons.patch
-#    patch -p0 < $script_dir/llvm_libcxx_macosx.patch
-
-    if [ "$mac_version" = "10.6" ];
-    then
-#      patch -p0 < $script_dir/llvm_libcxx_macosx_10_6.patch
-      cxxflags="-U__STRICT_ANSI__ -stdlib=libstdc++"
-#      ldflags="-L$cxxabi_lib_path -lc++abi -lstdc++"
-      ldflags="-L$cxxabi_lib_path -Wl,-rpath,$tmpInstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi -lstdc++"
-      cIncDirs=$tmpInstDir/include/c++/v1:/usr/include 
-      cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib -DC_INCLUDE_DIRS=$cIncDirs"   
-    fi
-    mkdir -p $build_dir
-    cd $build_dir
-#    echo "CC: $CC"
-#    echo "CXX: $CXX"
-    build_llvm
-  fi  
-}
 
 build_stage2() {
 
-  mkdir $build_dir
-  cd $build_dir
+  if [ ! -f $InstDir/bin/clang ]; then
+    mkdir $build_dir
+    cd $build_dir
   
-#  export LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-  if [ "$arch" = "linux" ];
-  then
-#    export LD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
-    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
-  elif [ "$arch" = "darwin" ];
-  then
-#    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
-    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
-    ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib -lc++abi" 
-    if [ "$mac_version" = "10.6" ];
-    then
-      cxxflags="$cxxflags -U__STRICT_ANSI__"  
-    fi
-  fi  
+##  export LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
+#  if [ "$arch" = "linux" ];
+#  then
+##    export LD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
+#    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
+#    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
+#  elif [ "$arch" = "darwin" ];
+#  then
+##    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
+#    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
+#    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
+#    ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib -lc++abi" 
+#    if [ "$mac_version" = "10.6" ];
+#    then
+#      cxxflags="$cxxflags -U__STRICT_ANSI__"  
+#    fi
+#  fi  
 
 
 #  cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/ -U__STRICT_ANSI__" 
-  cxxflags="-std=c++11 -stdlib=libc++ -U__STRICT_ANSI__" 
-#  ldflags="-L$tmpInstDir/lib -L$InstDir/lib -Wl,-rpath,$InstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi" 
-  ldflags="-L$tmpInstDir/lib -lc++ -L$InstDir/lib -Wl,-rpath,$InstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi" 
-  
-  cIncDirs=$InstDir/include/c++/v1:/usr/include
-
-  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib -DC_INCLUDE_DIRS=$cIncDirs"   
-
-  build_llvm 
+    build_llvm 
+  fi
 }
 
 # compile libcxxabi which is needed for a standalone version of libc++
