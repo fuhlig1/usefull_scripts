@@ -23,22 +23,21 @@
        "-Wl,-unexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/libc++unexp.exp"
        "/usr/lib/libSystem.B.dylib")
    else()
-@@ -64,19 +71,20 @@
+@@ -64,19 +71,19 @@
        list(FIND ${CMAKE_OSX_ARCHITECTURES} "armv7" OSX_HAS_ARMV7)
        if (OSX_HAS_ARMV7)
          set(OSX_RE_EXPORT_LINE
 -          "${CMAKE_OSX_SYSROOT}/usr/lib/libc++abi.dylib"
-+          "${CMAKE_OSX_SYSROOT}//${LIBCXX_LIBCXXABI_LIBRARY_PATH}/libc++abi.dylib"
++          "${CMAKE_OSX_SYSROOT}/${LIBCXX_LIBCXXABI_LIBRARY_PATH}/libc++abi.dylib"
            "-Wl,-reexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/libc++sjlj-abi.exp")
        else()
          set(OSX_RE_EXPORT_LINE
 -          "-Wl,-reexport_library,${CMAKE_OSX_SYSROOT}/usr/lib/libc++abi.dylib")
-+
-+"-Wl,-reexport_library,${CMAKE_OSX_SYSROOT}/${LIBCXX_LIBCXXABI_LIBRARY_PATH}/libc++abi.dylib")
++          "-Wl,-reexport_library,${CMAKE_OSX_SYSROOT}/${LIBCXX_LIBCXXABI_LIBRARY_PATH}/libc++abi.dylib")
        endif()
      else()
 -      set (OSX_RE_EXPORT_LINE "/usr/lib/libc++abi.dylib -Wl,-reexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/libc++abi${LIBCXX_LIBCPPABI_VERSION}.exp")
-+      set (OSX_RE_EXPORT_LINE "/${LIBCXX_LIBCXXABI_LIBRARY_PATH}/libc++abi.dylib -Wl,-reexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/libc++abi${LIBCXX_LIBCPPABI_VERSION}.exp")
++      set (OSX_RE_EXPORT_LINE "-Wl,-reexport_library,${LIBCXX_LIBCXXABI_LIBRARY_PATH}/libc++abi.dylib -Wl,-reexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/libc++abi${LIBCXX_LIBCPPABI_VERSION}.exp")
      endif()
  
      list(APPEND link_flags
