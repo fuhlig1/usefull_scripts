@@ -10,8 +10,8 @@
 version=34
 version_full=3.4
 
-tmpDir=/data.local3/tmp/build_llvm/
-InstDir=/data.local2/uhlig/compiler/llvm
+tmpDir=/tmp/build_llvm/
+InstDir=/Users/uhlig/compiler/llvm
 
 # unset environment variables
 unset CFLAGS
@@ -34,7 +34,7 @@ main() {
     download_llvm_core
     build_pre_stage1
   fi
-  
+    
   stage1_settings
   download_llvm_core
   download_llvm_addons
@@ -48,7 +48,12 @@ main() {
   build_stage2
 
   build_oclint
-  
+
+  if [ "$mac_version" = "10.6" ];
+  then
+    fix_library_pathes
+  fi
+    
   echo "To use clang as compiler you have to add the following lines to your environment"
   echo "##	#"
   echo " export PATH=$InstDir/bin:\$PATH"
@@ -107,8 +112,10 @@ stage2_settings() {
 
   if [ "$mac_version" = "10.6" ];
   then
+    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
+    ldflags="$ldflags -L$tmpInstDir/lib"
     cxxflags="$cxxflags -U__STRICT_ANSI__" 
-    cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib"   
+    cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
   fi
 }
 
@@ -519,6 +526,16 @@ build_oclint() {
     cp $source_dir/oclint/oclint-json-compilation-database/oclint-json-compilation-database $InstDir/bin
   fi
 }
+
+fix_library_pathes() {
+  # set the path to libc++ relative to the binary
+  cd $InstDir/bin
+  for file in $(find . -type f -exec file -L {} \; | grep Mach | cut -f1 -d:); do
+    install_name_tool -change libc++.1.dylib @loader_path/../lib/libc++.1.dylib $file
+  done
+  # maybe also to be done for libraries 
+}
+
 
 
 main "$@"
