@@ -106,8 +106,19 @@ stage2_settings() {
 
   cxxflags="-std=c++11 -stdlib=libc++" 
   ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
-  
-  cIncDirs=$InstDir/include/c++/v1:/usr/include
+
+  if [ "$arch" = "linux" ]; then
+    count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
+    if [ $count -eq 1 ]; then
+      cIncDirs=$InstDir/include/c++/v1:/usr/include 
+    else  
+      gccIncDir=$(gcc -print-multiarch)
+      cIncDirs=$InstDir/include/c++/v1:/usr/include:/usr/include/$gccIncDir
+    fi
+  else  
+    cIncDirs=$InstDir/include/c++/v1:/usr/include 
+  fi
+
   cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
 
   if [ "$mac_version" = "10.6" ];
@@ -137,7 +148,18 @@ stage1_settings() {
   cxxflags="-stdlib=libstdc++"
   ldflags="-L$cxxabi_lib_path -Wl,-rpath,$InstDir/lib"
 
-  cIncDirs=$InstDir/include/c++/v1:/usr/include 
+  if [ "$arch" = "linux" ]; then
+    count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
+    if [ $count -eq 1 ]; then
+      cIncDirs=$InstDir/include/c++/v1:/usr/include 
+    else  
+      gccIncDir=$(gcc -print-multiarch)
+      cIncDirs=$InstDir/include/c++/v1:/usr/include:/usr/include/$gccIncDir
+    fi
+  else  
+    cIncDirs=$InstDir/include/c++/v1:/usr/include 
+  fi
+
   cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
 
   if [ "$mac_version" = "10.6" ];
