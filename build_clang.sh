@@ -10,8 +10,8 @@
 version=34
 version_full=3.4
 
-tmpDir=/tmp/build_llvm_2/
-InstDir=/Users/uhlig/compiler/llvm
+tmpDir=/data.local3/tmp/build_llvm/
+InstDir=/data.local2/uhlig/compiler/llvm
 
 # unset environment variables
 unset CFLAGS
@@ -34,7 +34,7 @@ main() {
     download_llvm_core
     build_pre_stage1
   fi
-   
+
   stage1_settings
   download_llvm_core
   download_llvm_addons
@@ -42,7 +42,7 @@ main() {
 
   build_cxxabi 
   build_stage1 
-
+  exit
   stage2_settings
   build_cxxabi 
   build_stage2
@@ -78,46 +78,66 @@ usage() {
 }
 
 stage2_settings() {
-  cc=$tmpInstDir/bin/clang
-  cxx=$tmpInstDir/bin/clang  
+  stage=2
+  cc=$InstDir/bin/clang
+  cxx=$InstDir/bin/clang++
   source_dir=$tmpDir/$version_full
   build_dir=$tmpDir/build/${version_full}_stage2
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$InstDirBackup/$version_full
   cxxabi_include_path=$InstDir/include/cxxabi
   cxxabi_lib_path=$InstDir/lib
+  cxxflags="-std=c++11 -stdlib=libc++" 
+#  ldflags="-L$tmpInstDir/lib -lc++ -L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
+  ldflags="-L$tmpInstDir/lib -L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
+  
+  cIncDirs=$InstDir/include/c++/v1:/usr/include
+
+  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
+#    export LIBRARY_PATH=$tmpInstDir/lib:$LIBRARY_PATH
+#    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
+  if [ "$arch" = "linux" ];
+  then
+    export LD_LIBRARY_PATH=$tmpInstDir/lib:$LD_LIBRARY_PATH
+  echo "bla"
+  fi
+  
   if [ "$mac_version" = "10.6" ];
   then
-    cxxflags="-std=c++11 -stdlib=libc++ -U__STRICT_ANSI__" 
-#  ldflags="-L$tmpInstDir/lib -L$InstDir/lib -Wl,-rpath,$InstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi" 
+    cxxflags="$cxxflags-U__STRICT_ANSI__" 
     ldflags="-L$tmpInstDir/lib -lc++ -L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
   
     cIncDirs=$InstDir/include/c++/v1:/usr/include
 
-    cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib -DC_INCLUDE_DIRS=$cIncDirs"   
+    cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib"   
 #    export LIBRARY_PATH=$tmpInstDir/lib:$LIBRARY_PATH
 #    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
   fi
 }
 
 stage1_settings() {
-  version=$version_final
+  stage=1
+  version=$version_final 
   version_full=$version_full_final
   cc=$tmpInstDir/bin/clang
-  cxx=$tmpInstDir/bin/clang
+  cxx=$tmpInstDir/bin/clang++
   source_dir=$tmpDir/$version_full
   build_dir=$tmpDir/build/$version_full
+
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$tmpInstDir
+#  InstDir=$InstDirBackup/$version_full
+
   cxxabi_include_path=$InstDir/include/cxxabi
   cxxabi_lib_path=$InstDir/lib
+  cxxflags="-stdlib=libstdc++"
+  ldflags="-L$cxxabi_lib_path -Wl,-rpath,$InstDir/lib -lstdc++"
+  cIncDirs=$InstDir/include/c++/v1:/usr/include 
+  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
   if [ "$mac_version" = "10.6" ];
   then
-    cxxflags="-U__STRICT_ANSI__ -stdlib=libstdc++"
-#    ldflags="-L$cxxabi_lib_path -Wl,-rpath,$tmpInstDir/lib -Wl,-reexport_library,$cxxabi_lib_path/libc++abi.dylib -Wl,-sub_library,libc++abi -lstdc++"
-    ldflags="-L$cxxabi_lib_path -Wl,-rpath,$tmpInstDir/lib  -lstdc++"
-    cIncDirs=$tmpInstDir/include/c++/v1:/usr/include 
-    cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib -DC_INCLUDE_DIRS=$cIncDirs"   
+    cxxflags="$cxxflags -U__STRICT_ANSI__"
+    cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
   fi
 }
 
@@ -321,7 +341,7 @@ build_pre_stage1() {
 }
 
 build_stage1() {
-  if [ ! -f $tmpInstDir/bin/clang ]; then
+  if [ ! -f $build_dir/bin/clang ]; then
     mkdir -p $build_dir
     cd $build_dir
     build_llvm
@@ -346,7 +366,7 @@ patch_llvm() {
 
 build_stage2() {
 
-  if [ ! -f $InstDir/bin/clang ]; then
+  if [ ! -f $build_dir/bin/clang ]; then
     mkdir $build_dir
     cd $build_dir
   
@@ -378,10 +398,11 @@ build_stage2() {
 # information taken from
 # http://dragoonsheir.wordpress.com/2013/03/16/wayland-and-c11-programming-part-1-of-n/
 build_cxxabi() {
-  if [ ! -f $InstDir/lib/$cxxabi_checkfile ]; then
+  set -xv
+  if [ ! -f $source_dir/libc++/$stage/libcxxabi/lib/$cxxabi_checkfile ]; then
 
-    mkdir -p $source_dir/libc++
-    cd $source_dir/libc++
+    mkdir -p $source_dir/libc++/$stage
+    cd $source_dir/libc++/$stage
 
     svn co -r 200202 http://llvm.org/svn/llvm-project/libcxxabi/trunk libcxxabi
     cd libcxxabi/lib
@@ -389,6 +410,15 @@ build_cxxabi() {
     if [ "$arch" = "darwin" ];
     then
       sed 's#-install_name /usr/lib/libc++abi.dylib#-install_name $InstDir/lib/libc++abi.dylib#g' -i' ' buildit  
+    elif [ "$arch" = "linux" ];
+    then
+      if [ "$stage" = "1" ];
+      then
+        sed 's#-std=c++11 -stdlib=libc++#-std=c++11 -stdlib=libstdc++#g' -i buildit  
+      elif [ "$stage" = "2" ];
+      then
+        sed 's#-lrt -lc -lstdc++#-lrt -lc -L$InstDir/lib -lc++#g' -i buildit  
+      fi
     fi    
 
     InstDir=$InstDir \
@@ -413,6 +443,7 @@ build_cxxabi() {
       ln -s libc++abi.$ext.1 libc++abi.$ext
     fi
   fi
+  set +xv
 }
 
 main "$@"
