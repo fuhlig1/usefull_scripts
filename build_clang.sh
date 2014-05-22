@@ -34,7 +34,7 @@ main() {
     download_llvm_core
     build_pre_stage1
   fi
-
+  
   stage1_settings
   download_llvm_core
   download_llvm_addons
@@ -42,11 +42,22 @@ main() {
 
   build_cxxabi 
   build_stage1 
-  exit
+
   stage2_settings
   build_cxxabi 
   build_stage2
-  exit
+
+  build_oclint
+  
+  echo "To use clang as compiler you have to add the following lines to your environment"
+  echo "##	#"
+  echo " export PATH=$InstDir/bin:\$PATH"
+  echo "###"
+  echo "To use clang as default compiler you can add also the following lines"
+  echo "###"
+  echo " export CC=$InstDir/bin/clang"
+  echo " export CXX=$InstDir/bin/clang++"
+  echo "###"
 
 }
 
@@ -87,31 +98,17 @@ stage2_settings() {
   InstDir=$InstDirBackup/$version_full
   cxxabi_include_path=$InstDir/include/cxxabi
   cxxabi_lib_path=$InstDir/lib
+
   cxxflags="-std=c++11 -stdlib=libc++" 
-#  ldflags="-L$tmpInstDir/lib -lc++ -L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
-  ldflags="-L$tmpInstDir/lib -L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
+  ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
   
   cIncDirs=$InstDir/include/c++/v1:/usr/include
-
   cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
-#    export LIBRARY_PATH=$tmpInstDir/lib:$LIBRARY_PATH
-#    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
-  if [ "$arch" = "linux" ];
-  then
-    export LD_LIBRARY_PATH=$tmpInstDir/lib:$LD_LIBRARY_PATH
-  echo "bla"
-  fi
-  
+
   if [ "$mac_version" = "10.6" ];
   then
-    cxxflags="$cxxflags-U__STRICT_ANSI__" 
-    ldflags="-L$tmpInstDir/lib -lc++ -L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
-  
-    cIncDirs=$InstDir/include/c++/v1:/usr/include
-
+    cxxflags="$cxxflags -U__STRICT_ANSI__" 
     cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$tmpInstDir/lib"   
-#    export LIBRARY_PATH=$tmpInstDir/lib:$LIBRARY_PATH
-#    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
   fi
 }
 
@@ -126,14 +123,16 @@ stage1_settings() {
 
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$tmpInstDir
-#  InstDir=$InstDirBackup/$version_full
 
   cxxabi_include_path=$InstDir/include/cxxabi
   cxxabi_lib_path=$InstDir/lib
+
   cxxflags="-stdlib=libstdc++"
-  ldflags="-L$cxxabi_lib_path -Wl,-rpath,$InstDir/lib -lstdc++"
+  ldflags="-L$cxxabi_lib_path -Wl,-rpath,$InstDir/lib"
+
   cIncDirs=$InstDir/include/c++/v1:/usr/include 
   cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
+
   if [ "$mac_version" = "10.6" ];
   then
     cxxflags="$cxxflags -U__STRICT_ANSI__"
@@ -155,6 +154,7 @@ bootstrap_settings() {
   echo "So we will first build clang/llvm $version_tmp_full and use this version to compile the final clang/llvm version $version_full."
   version=32
   version_full=3.2
+
   if [ "$mac_version" = "10.6" ];
   then
     cxxflags="-U__STRICT_ANSI__"  
@@ -316,8 +316,7 @@ download_llvm_addons() {
 }
 
 build_llvm() {
-  echo "CC: $cc"
-  echo "CXX: $cxx"
+
   CC=$cc CXX=$cxx \
   CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
   cmake $source_dir/llvm/$version \
@@ -370,27 +369,10 @@ build_stage2() {
     mkdir $build_dir
     cd $build_dir
   
-##  export LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-#  if [ "$arch" = "linux" ];
-#  then
-##    export LD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-#    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
-#    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
-#  elif [ "$arch" = "darwin" ];
-#  then
-##    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-#    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
-#    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
-#    ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib -lc++abi" 
-#    if [ "$mac_version" = "10.6" ];
-#    then
-#      cxxflags="$cxxflags -U__STRICT_ANSI__"  
-#    fi
-#  fi  
-
-
-#  cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/ -U__STRICT_ANSI__" 
     build_llvm 
+    mkdir -p $InstDir/bin     
+    cp -r $source_dir/llvm/$version/tools/clang/tools/scan-view $InstDir/bin
+    cp -r $source_dir/llvm/$version/tools/clang/tools/scan-build $InstDir/bin
   fi
 }
 
@@ -415,9 +397,6 @@ build_cxxabi() {
       if [ "$stage" = "1" ];
       then
         sed 's#-std=c++11 -stdlib=libc++#-std=c++11 -stdlib=libstdc++#g' -i buildit  
-      elif [ "$stage" = "2" ];
-      then
-        sed 's#-lrt -lc -lstdc++#-lrt -lc -L$InstDir/lib -lc++#g' -i buildit  
       fi
     fi    
 
@@ -446,6 +425,102 @@ build_cxxabi() {
   set +xv
 }
 
+build_oclint() {
+  if [ ! -f $InstDir/bin/oclint ]; 
+  then
+    cd $source_dir
+    git clone https://github.com/oclint/oclint
+    cd oclint
+    git checkout release_08
+  
+    if [ "$arch" = "linux" ];
+    then
+      sed 's/libstdc++/libc++/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
+      ld_flags="" 
+    elif [ "$arch" = "darwin" ];
+    then
+      if [ "$mac_version" = "10.6" ];
+      then
+        sed 's/-fPIC"/-fPIC -U__STRICT_ANSI__"/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
+	sed "s|\${OSX_DEVELOPER_ROOT}/Toolchains/XcodeDefault.xctoolchain/usr/lib|$InstDir/include|g" -i'' oclint-core/cmake/OCLintConfig.cmake
+    fi
+  fi
+
+    mkdir -p build/oclint-core
+    cd build/oclint-core
+    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    cmake -D OCLINT_BUILD_TYPE=Release \
+          -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
+          -D CMAKE_C_COMPILER=$InstDir/bin/clang \
+          -D LLVM_ROOT=$InstDir \
+          $source_dir/oclint/oclint-core
+    make -j$ncpu
+  
+    cd $source_dir/oclint/build
+    mkdir -p oclint-metrics
+    cd oclint-metrics
+    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    cmake -D OCLINT_BUILD_TYPE=Release \
+          -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
+          -D CMAKE_C_COMPILER=$InstDir/bin/clang \
+          -D LLVM_ROOT=$InstDir \
+          $source_dir/oclint/oclint-metrics
+    make -j$ncpu      
+  
+    cd $source_dir/oclint/build
+    mkdir -p oclint-rules
+    cd oclint-rules
+    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    cmake -D OCLINT_BUILD_TYPE=Release \
+          -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
+          -D CMAKE_C_COMPILER=$InstDir/bin/clang \
+          -D LLVM_ROOT=$InstDir \
+          -D OCLINT_BUILD_DIR=$source_dir/oclint/build/oclint-core \
+          -D OCLINT_SOURCE_DIR=$source_dir/oclint/oclint-core \
+          -D OCLINT_METRICS_SOURCE_DIR=$source_dir/oclint/oclint-metrics \
+          -D OCLINT_METRICS_BUILD_DIR=$source_dir/oclint/build/oclint-metrics \
+          $source_dir/oclint/oclint-rules
+    make -j$ncpu
+  
+    cd $source_dir/oclint/build
+    mkdir -p oclint-reporters
+    cd oclint-reporters
+    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    cmake -D OCLINT_BUILD_TYPE=Release \
+          -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
+          -D CMAKE_C_COMPILER=$InstDir/bin/clang \
+          -D LLVM_ROOT=$InstDir \
+          -D OCLINT_BUILD_DIR=$source_dir/oclint/build/oclint-core \
+          -D OCLINT_SOURCE_DIR=$source_dir/oclint/oclint-core \
+          $source_dir/oclint/oclint-reporters
+    make -j$ncpu
+  
+    cd $source_dir/oclint/build
+    mkdir -p oclint-driver
+    cd oclint-driver
+    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    cmake -D OCLINT_BUILD_TYPE=Release \
+          -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
+          -D CMAKE_C_COMPILER=$InstDir/bin/clang \
+          -D LLVM_ROOT=$InstDir \
+          -D OCLINT_BUILD_DIR=$source_dir/oclint/build/oclint-core \
+          -D OCLINT_SOURCE_DIR=$source_dir/oclint/oclint-core \
+          $source_dir/oclint/oclint-driver
+    make VERBOSE=1
+  
+    mkdir -p $InstDir/lib/oclint/reporters
+    cp $source_dir/oclint/build/oclint-reporters/reporters.dl/*.$ext $InstDir/lib/oclint/reporters
+    mkdir -p $InstDir/lib/oclint/rules
+    cp $source_dir/oclint/build/oclint-rules/rules.dl/*.$ext $InstDir/lib/oclint/rules
+    cp $source_dir/oclint/build/oclint-driver/bin/oclint-0.8 $InstDir/bin
+    ln -s $InstDir/bin/oclint-0.8 $InstDir/bin/oclint
+    cd $source_dir/oclint/
+    git clone https://github.com/oclint/oclint-json-compilation-database.git
+    cp $source_dir/oclint/oclint-json-compilation-database/oclint-json-compilation-database $InstDir/bin
+  fi
+}
+
+
 main "$@"
 
 echo "Should not come here"
@@ -454,252 +529,7 @@ exit
 
 
 
-   
-if [ ! -f $tmpInstDir/bin/clang ]; then
-  mkdir -p $build_dir
-  cd $build_dir
-  if [ "$bootstrap" = "yes" ];
-  then 
-    if [ "$mac_version" = "10.6" ];
-    then
-      cxxflags="-U__STRICT_ANSI__"  
-    fi
-  else 
-    if [ "$mac_version" = "10.6" ];
-    then
-      cxxflags="-U__STRICT_ANSI__ -I$cxxabi_include_path"  
-      ldflags="-L$cxxabi_lib_path -lc++abi"
-      cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path"   
-      export libcxxabi_install_dir="$cxxabi_lib_path"
-      export libcxx_install_dir="$tmpInstDir"
-#      sed 's#/usr/lib/libc++.1.dylib#$ENV{libcxx_install_path}/lib/libc++.1.dylib#g' -i' ' $source_dir/llvm/$version/projects/libcxx/lib/CMakeLists.txt
-#      sed 's#/usr/lib/libc++abi.dylib#$ENV{libcxxabi_install_path}/libc++abi.dylib#g' -i' ' $source_dir/llvm/$version/projects/libcxx/lib/CMakeLists.txt
-    fi
-  fi
 
-  echo "BLA"
-  echo $libcxxabi_install_dir
-  echo $libcxx_install_dir
-  CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
-    cmake $source_dir/llvm/$version -DCMAKE_INSTALL_PREFIX=$tmpInstDir $cmakeflags
- 
-  make -j$ncpu 
-  # somehow the compilation of some tests crash due to inconsistent?? libstdc++  
-# package g++-multilib was missing, so the tests for 32bit executables couldn't be
-# compiled  
-#  make check-all -j16
-  make install
-
-  # create symbolic links for cc and c++ 
-  cd $tmpInstDir/bin
-  ln -s clang cc
-  ln -s clang++ c++
-fi
-
-
-if [ "$bootstrap" = "yes" ];
-then 
-  echo "Now we will build the final version of clang"
-  export cxxabi_include_path=$InstDir/include/cxxabi
-  export cxxabi_lib_path=$InstDir/lib
-  $script_dir/build_clang.sh  
-  exit
-fi
-
-# Now we can recompile clang using the temporary clang and the lbcxxabi
-if [ ! -f $InstDir/bin/clang ]; 
-then
-  mkdir $build_dir_stage2
-  cd $build_dir_stage2
-#  rm -rf *
-#  echo "InstallDir: $InstDir"
-#  ls -la  $InstDir/lib
-  
-  export LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-  if [ "$arch" = "linux" ];
-  then
-    export LD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
-    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
-  elif [ "$arch" = "darwin" ];
-  then
-    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-    cxxflags="-std=c++11 -stdlib=libc++ -I$tmpInstDir/include/c++/v1/" 
-    ldflags="-L$tmpInstDir/lib -L$InstDir/lib -lc++abi" 
-    if [ "$mac_version" = "10.6" ];
-    then
-      export libcxxabi_install_dir="$InstDir/lib"
-      export libcxx_install_dir="$InstDir"
-      cxxflags="$cxxflags -U__STRICT_ANSI__"  
-    fi
-  fi  
-#  elif [ "$arch" = "darwin" ];
-#  then
-#    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$InstDir/lib
-#  fi
-  
-  # extract the correct C_INCLUDE_DIRS
-  if [ "$arch" = "linux" ];
-  then
-    gccIncDir=$(gcc -print-multiarch)
-    cIncDirs=/usr/include/$gccIncDir:/usr/include:$InstDir/include/c++/v1
-  elif [ "$arch" = "darwin" ];
-  then
-    cIncDirs=/usr/include:$InstDir/include/c++/v1
-  fi
-  
-  env
-  echo "BLA"
-  echo $libcxxabi_install_dir
-  echo $libcxx_install_dir
-  CC=$tmpInstDir/bin/clang CXX=$tmpInstDir/bin/clang++ \
-  CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
-  cmake $source_dir/llvm/$version \
-        -DCMAKE_INSTALL_PREFIX=$InstDir \
-        -DLIBCXX_CXX_ABI=libcxxabi \
-        -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$InstDir/include/cxxabi \
-        -DC_INCLUDE_DIRS=$cIncDirs 
-  make VERBOSE=1 -j$ncpu
-  make install
-
-  if [ ! -f bin/clang ]; 
-  then
-    exit
-  fi
-
-  mkdir -p $InstDir/bin     
-  cp -r $source_dir/llvm/$version/tools/clang/tools/scan-view $InstDir/bin
-  cp -r $source_dir/llvm/$version/tools/clang/tools/scan-build $InstDir/bin
-  # create symbolic links for cc and c++ 
-  cd $InstDir/bin
-  ln -s clang cc
-  ln -s clang++ c++
-fi
-
-export LIBRARY_PATH=$InstDir/lib
-if [ "$arch" = "linux" ];
-then
-  export LD_LIBRARY_PATH=$InstDir/lib
-elif [ "$arch" = "darwin" ];
-then
-  if [ "$mac_version" = "10.6" ];
-  then
-    export DYLD_LIBRARY_PATH=$InstDir/lib
-    export libcxxabi_install_dir="$InstDir/lib"
-    export libcxx_install_dir="$InstDir"
-    cxxflags="-U__STRICT_ANSI__"  
-  fi
-fi  
-
-if [ ! -f $InstDir/bin/oclint ]; 
-then
-  cd $source_dir
-  git clone https://github.com/oclint/oclint
-  cd oclint
-  git checkout release_08
-  
-  if [ "$arch" = "linux" ];
-  then
-    sed 's/libstdc++/libc++/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
-    ld_flags="" 
-  elif [ "$arch" = "darwin" ];
-  then
-    if [ "$mac_version" = "10.6" ];
-    then
-      sed 's/-fPIC"/-fPIC -U__STRICT_ANSI__"/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
-      sed "s|\${OSX_DEVELOPER_ROOT}/Toolchains/XcodeDefault.xctoolchain/usr/lib|$InstDir/include|g" -i'' oclint-core/cmake/OCLintConfig.cmake
-      ld_flags="-L$InstDir/lib -lc++abi" 
-#    ld_flags="-lc++abi" 
-    fi
-  fi
-
-  echo $cxxflags  
-  mkdir -p build/oclint-core
-  cd build/oclint-core
-  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
-  cmake -D OCLINT_BUILD_TYPE=Release \
-        -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
-        -D CMAKE_C_COMPILER=$InstDir/bin/clang \
-        -D LLVM_ROOT=$InstDir \
-        $source_dir/oclint/oclint-core
-  make VERBOSE=1
-
-  cd $source_dir/oclint/build
-  mkdir -p oclint-metrics
-  cd oclint-metrics
-  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
-  cmake -D OCLINT_BUILD_TYPE=Release \
-        -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
-        -D CMAKE_C_COMPILER=$InstDir/bin/clang \
-        -D LLVM_ROOT=$InstDir \
-        $source_dir/oclint/oclint-metrics
-  make -j$ncpu      
-
-  cd $source_dir/oclint/build
-  mkdir -p oclint-rules
-  cd oclint-rules
-  echo "DIR: $source_dir/oclint/oclint-rules"
-  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
-  cmake -D OCLINT_BUILD_TYPE=Release \
-        -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
-        -D CMAKE_C_COMPILER=$InstDir/bin/clang \
-        -D LLVM_ROOT=$InstDir \
-        -D OCLINT_BUILD_DIR=$source_dir/oclint/build/oclint-core \
-        -D OCLINT_SOURCE_DIR=$source_dir/oclint/oclint-core \
-        -D OCLINT_METRICS_SOURCE_DIR=$source_dir/oclint/oclint-metrics \
-        -D OCLINT_METRICS_BUILD_DIR=$source_dir/oclint/build/oclint-metrics \
-        $source_dir/oclint/oclint-rules
-  make -j$ncpu
-
-  cd $source_dir/oclint/build
-  mkdir -p oclint-reporters
-  cd oclint-reporters
-  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
-  cmake -D OCLINT_BUILD_TYPE=Release \
-        -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
-        -D CMAKE_C_COMPILER=$InstDir/bin/clang \
-        -D LLVM_ROOT=$InstDir \
-        -D OCLINT_BUILD_DIR=$source_dir/oclint/build/oclint-core \
-        -D OCLINT_SOURCE_DIR=$source_dir/oclint/oclint-core \
-        $source_dir/oclint/oclint-reporters
-  make -j$ncpu
-
-  cd $source_dir/oclint/build
-  mkdir -p oclint-driver
-  cd oclint-driver
-  LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
-  cmake -D OCLINT_BUILD_TYPE=Release \
-        -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
-        -D CMAKE_C_COMPILER=$InstDir/bin/clang \
-        -D LLVM_ROOT=$InstDir \
-        -D OCLINT_BUILD_DIR=$source_dir/oclint/build/oclint-core \
-        -D OCLINT_SOURCE_DIR=$source_dir/oclint/oclint-core \
-        $source_dir/oclint/oclint-driver
-  make VERBOSE=1
-
-  mkdir -p $InstDir/lib/oclint/reporters
-  cp $source_dir/oclint/build/oclint-reporters/reporters.dl/*.$ext $InstDir/lib/oclint/reporters
-  mkdir -p $InstDir/lib/oclint/rules
-  cp $source_dir/oclint/build/oclint-rules/rules.dl/*.$ext $InstDir/lib/oclint/rules
-  cp $source_dir/oclint/build/oclint-driver/bin/oclint-0.8 $InstDir/bin
-  ln -s $InstDir/bin/oclint-0.8 $InstDir/bin/oclint
-  cd $source_dir/oclint/
-  git clone https://github.com/oclint/oclint-json-compilation-database.git
-  cp $source_dir/oclint/oclint-json-compilation-database/oclint-json-compilation-database $InstDir/bin
-fi
-
-# At runtime the LD_LIBRARY_PATH and LIBRARY_PATH environment varables need to be present and have to point to $InstDir/lib 
-echo "To use clang as compiler you have to add the following lines to your environment"
-echo "###"
-echo " export PATH=$InstDir/bin:\$PATH"
-echo " export LD_LIBRARY_PATH=$InstDir/lib:\$LD_LIBRARY_PATH"
-echo " export LIBRARY_PATH=$InstDir/lib:\$LIBRARY_PATH"
-echo "###"
-echo "To use clang as default compiler you can add also the following lines"
-echo "###"
-echo " export CC=$InstDir/bin/clang"
-echo " export CXX=$InstDir/bin/clang++"
-echo "###"
 
                     
 
