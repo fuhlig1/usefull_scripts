@@ -11,7 +11,7 @@ version=34
 version_full=3.4
 
 tmpDir=/tmp/build_llvm/
-InstDir=/Users/uhlig/compiler/llvm
+InstDir=/home/devops/compiler/llvm
 
 # unset environment variables
 unset CFLAGS
@@ -34,7 +34,8 @@ main() {
     download_llvm_core
     build_pre_stage1
   fi
-    
+
+ 
   stage1_settings
   download_llvm_core
   download_llvm_addons
@@ -108,12 +109,16 @@ stage2_settings() {
   ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
 
   if [ "$arch" = "linux" ]; then
+#    export LD_LIBRARY_PATH=$tmpInstDir/lib:$LD_LIBRARY_PATH
+    ldflags="$ldflags -lc++abi"
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
     if [ $count -eq 1 ]; then
       cIncDirs=$InstDir/include/c++/v1:/usr/include 
     else  
       gccIncDir=$(gcc -print-multiarch)
-      cIncDirs=$InstDir/include/c++/v1:/usr/include:/usr/include/$gccIncDir
+      gccVersion=$(gcc -dumpversion)
+      cIncDirs=$InstDir/include/c++/v1:/usr/include:/usr/include/$gccIncDir:/usr/include/$gccIncDir/c++/$gccVersion
+      cxxflags="$cxxflags -I/usr/include/$gccIncDir -I/usr/include/$gccIncDir/c++/$gccVersion"
     fi
   else  
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
@@ -154,7 +159,9 @@ stage1_settings() {
       cIncDirs=$InstDir/include/c++/v1:/usr/include 
     else  
       gccIncDir=$(gcc -print-multiarch)
-      cIncDirs=$InstDir/include/c++/v1:/usr/include:/usr/include/$gccIncDir
+      gccVersion=$(gcc -dumpversion)
+      cIncDirs=$InstDir/include/c++/v1:/usr/include:/usr/include/$gccIncDir:/usr/include/$gccIncDir/c++/$gccVersion
+      cxxflags="$cxxflags -I/usr/include/$gccIncDir -I/usr/include/$gccIncDir/c++/$gccVersion"
     fi
   else  
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
@@ -180,7 +187,9 @@ bootstrap_settings() {
   build_dir=$tmpDir/build/$version_tmp_full
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_tmp_full
   InstDir=$tmpInstDir
-  echo "So we will first build clang/llvm $version_tmp_full and use this version to compile the final clang/llvm version $version_full."
+  if [ "$boostrap" = "yes" ]; then
+    echo "So we will first build clang/llvm $version_tmp_full and use this version to compile the final clang/llvm version $version_full."
+  fi
   version=32
   version_full=3.2
 
@@ -233,6 +242,8 @@ check_compiler() {
   local compiler_version
   local minor
   local major
+  bootstrap=no
+
   if [ "$compiler" = "clang" ];
   then
     cc=clang
@@ -244,35 +255,25 @@ check_compiler() {
     fi
     major=$(echo $compiler_version | cut -d. -f1 ) 
     minor=$(echo $compiler_version | cut -d. -f2) 
-  else
-    cc=gcc
-    cxx=g++
-    compiler_version=$(gcc -dumpversion)
-    major=$(echo $compiler_version | cut -d. -f1 ) 
-    minor=$(echo $compiler_version | cut -d. -f2) 
-  fi
-  bootstrap=no
-  if [ "$compiler" = "gcc" ];
-  then
-    if [ $major -lt 4 ];
-    then
-       bootstrap=yes
-    elif [ $minor -lt 7 ];
-    then
-      bootstrap=yes   
-    fi  
-  elif [ "$compiler" = "clang" ];
-  then
+
     if [ $major -eq 3 -a $minor -ge 2 ];
     then
       bootstrap=no
     else
       bootstrap=yes
     fi
+  else
+    cc=gcc
+    cxx=g++
+    compiler_version=$(gcc -dumpversion)
+    major=$(echo $compiler_version | cut -d. -f1 ) 
+    minor=$(echo $compiler_version | cut -d. -f2) 
+    bootstrap=yes
   fi
   if [ "$bootstrap" = "yes" ];
   then 
-    echo "Your compiler $compiler $major.$minor is to old to compile clang/llvm $version_full directly."
+    echo "To be able to compile the libc++ abi code one needs at least Clang 3.2"
+    echo "Your compiler $compiler $major.$minor is not able to compile this code."
   fi
 
 }
@@ -316,7 +317,7 @@ download_llvm_core() {
   fi
 
   cd $source_dir/llvm/$version/projects
-  if [ "$bootstrap" = "yes" ];
+  if [ "$version" = "32" ];
   then
     if [ ! -d libcxx ]; then
       svn co http://llvm.org/svn/llvm-project/libcxx/branches/release_$version libcxx
@@ -369,7 +370,7 @@ build_pre_stage1() {
 }
 
 build_stage1() {
-  if [ ! -f $build_dir/bin/clang ]; then
+  if [ ! -f $InstDir/bin/clang ]; then
     mkdir -p $build_dir
     cd $build_dir
     build_llvm
@@ -394,7 +395,7 @@ patch_llvm() {
 
 build_stage2() {
 
-  if [ ! -f $build_dir/bin/clang ]; then
+  if [ ! -f $InstDir/bin/clang ]; then
     mkdir $build_dir
     cd $build_dir
   
@@ -465,7 +466,6 @@ build_oclint() {
     if [ "$arch" = "linux" ];
     then
       sed 's/libstdc++/libc++/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
-      ld_flags="" 
     elif [ "$arch" = "darwin" ];
     then
       if [ "$mac_version" = "10.6" ];
@@ -477,7 +477,7 @@ build_oclint() {
 
     mkdir -p build/oclint-core
     cd build/oclint-core
-    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    LDFLAGS=$ldflags CXXFLAGS=$cxxflags \
     cmake -D OCLINT_BUILD_TYPE=Release \
           -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
           -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -488,7 +488,7 @@ build_oclint() {
     cd $source_dir/oclint/build
     mkdir -p oclint-metrics
     cd oclint-metrics
-    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    LDFLAGS=$ldflags CXXFLAGS=$cxxflags \
     cmake -D OCLINT_BUILD_TYPE=Release \
           -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
           -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -499,7 +499,7 @@ build_oclint() {
     cd $source_dir/oclint/build
     mkdir -p oclint-rules
     cd oclint-rules
-    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    LDFLAGS=$ldflags CXXFLAGS=$cxxflags \
     cmake -D OCLINT_BUILD_TYPE=Release \
           -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
           -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -514,7 +514,7 @@ build_oclint() {
     cd $source_dir/oclint/build
     mkdir -p oclint-reporters
     cd oclint-reporters
-    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    LDFLAGS=$ldflags CXXFLAGS=$cxxflags \
     cmake -D OCLINT_BUILD_TYPE=Release \
           -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
           -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -527,7 +527,7 @@ build_oclint() {
     cd $source_dir/oclint/build
     mkdir -p oclint-driver
     cd oclint-driver
-    LDFLAGS=$ld_flags CXXFLAGS=$cxxflags \
+    LDFLAGS=$ldflags CXXFLAGS=$cxxflags \
     cmake -D OCLINT_BUILD_TYPE=Release \
           -D CMAKE_CXX_COMPILER=$InstDir/bin/clang++ \
           -D CMAKE_C_COMPILER=$InstDir/bin/clang \
@@ -535,7 +535,7 @@ build_oclint() {
           -D OCLINT_BUILD_DIR=$source_dir/oclint/build/oclint-core \
           -D OCLINT_SOURCE_DIR=$source_dir/oclint/oclint-core \
           $source_dir/oclint/oclint-driver
-    make VERBOSE=1
+    make -j$ncpu
   
     mkdir -p $InstDir/lib/oclint/reporters
     cp $source_dir/oclint/build/oclint-reporters/reporters.dl/*.$ext $InstDir/lib/oclint/reporters
