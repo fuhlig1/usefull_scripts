@@ -289,7 +289,7 @@ check_architecture() {
     ncpu=$(cat /proc/cpuinfo | grep processor | wc -l)
     triple=-linux-
     ext=so
-    cxxabi_checkfile=libc++abi.$ext.1.0
+    cxxabi_checkfile=libc++abi.a
   elif [ "$arch" = "darwin" ];
   then
     mac_version=$(sw_vers -productVersion | cut -d . -f 1-2)
@@ -382,12 +382,15 @@ patch_llvm() {
     cd $source_dir/llvm/$version/
     patch -p0 < $script_dir/llvm_core.patch
     patch -p0 < $script_dir/llvm_addons.patch
-    patch -p0 < $script_dir/llvm_libcxx_macosx.patch
-
-    if [ "$mac_version" = "10.6" ];
-    then
-      patch -p0 < $script_dir/llvm_libcxx_macosx_10_6_1.patch
-    fi
+    if [ "$arch" = "darwin" ]; then
+      patch -p0 < $script_dir/llvm_libcxx_macosx.patch
+      if [ "$mac_version" = "10.6" ];
+      then
+        patch -p0 < $script_dir/llvm_libcxx_macosx_10_6_1.patch
+      fi
+    else
+      patch -p0 < $script_dir/llvm_libcxx_linux.patch
+    fi     
     touch $source_dir/llvm/$version/patched
   fi
 }
@@ -411,7 +414,7 @@ build_stage2() {
 # http://dragoonsheir.wordpress.com/2013/03/16/wayland-and-c11-programming-part-1-of-n/
 build_cxxabi() {
   set -xv
-  if [ ! -f $source_dir/libc++/$stage/libcxxabi/lib/$cxxabi_checkfile ]; then
+  if [ ! -f $InstDir/lib/$cxxabi_checkfile ]; then
 
     mkdir -p $source_dir/libc++/$stage
     cd $source_dir/libc++/$stage
@@ -428,6 +431,7 @@ build_cxxabi() {
       then
         sed 's#-std=c++11 -stdlib=libc++#-std=c++11 -stdlib=libstdc++#g' -i buildit  
       fi
+      patch -p0 < $script_dir/libc++abi_linux.patch
     fi    
 
     InstDir=$InstDir \
@@ -445,12 +449,6 @@ build_cxxabi() {
  
     mkdir -p $InstDir/lib
     cp  $cxxabi_checkfile $InstDir/lib
-    if [ "$arch" = "linux" ];
-    then
-      cd $InstDir/lib
-      ln -s libc++abi.$ext.1.0 libc++abi.$ext.1
-      ln -s libc++abi.$ext.1 libc++abi.$ext
-    fi
   fi
   set +xv
 }
