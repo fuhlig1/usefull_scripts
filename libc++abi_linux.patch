@@ -1,0 +1,17 @@
+--- buildit	2014-05-23 15:31:14.522402000 +0100
++++ buildit_new	2014-05-26 07:33:16.246402000 +0100
+@@ -90,6 +90,14 @@
+     $CXX -c -g -Os $RC_CFLAGS $EXTRA_FLAGS -I../include $OPTIONS $FILE
+   done
+   ;;
++  *-apple-*)
++  # On Mac, we do not need to build a static library and can use
++  # -rrexport_library instead.
++  ;;
++  *)
++  ar cr libc++abi.a *.o
++  ranlib libc++abi.a
++  ;;
+ esac
+ $CC *.o $RC_CFLAGS $LDSHARED_FLAGS $EXTRA_FLAGS
+ 
