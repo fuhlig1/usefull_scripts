@@ -126,12 +126,13 @@ stage2_settings() {
 
   cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
 
-  if [ "$mac_version" = "10.6" ];
-  then
-    export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
-    ldflags="$ldflags -L$tmpInstDir/lib"
-    cxxflags="$cxxflags -U__STRICT_ANSI__" 
+  if [ "$arch" = "darwin" ]; then
     cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
+    if [ "$mac_version" = "10.6" ]; then
+      export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
+      ldflags="$ldflags -L$tmpInstDir/lib"
+      cxxflags="$cxxflags -U__STRICT_ANSI__" 
+    fi
   fi
 }
 
@@ -139,8 +140,10 @@ stage1_settings() {
   stage=1
   version=$version_final 
   version_full=$version_full_final
-  cc=$tmpInstDir/bin/clang
-  cxx=$tmpInstDir/bin/clang++
+  if [ "$bootstrap" = "yes" ]; then
+    cc=$tmpInstDir/bin/clang
+    cxx=$tmpInstDir/bin/clang++
+  fi
   source_dir=$tmpDir/$version_full
   build_dir=$tmpDir/build/$version_full
 
@@ -169,11 +172,13 @@ stage1_settings() {
 
   cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
 
-  if [ "$mac_version" = "10.6" ];
-  then
-    cxxflags="$cxxflags -U__STRICT_ANSI__"
+  if [ "$arch" = "darwin" ]; then
     cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
-  fi
+    if [ "$mac_version" = "10.6" ]; then
+      cxxflags="$cxxflags -U__STRICT_ANSI__"
+      cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
+    fi
+  fi  
 }
 
 # Define directories for bootstrap installation
@@ -424,7 +429,7 @@ build_cxxabi() {
 
     if [ "$arch" = "darwin" ];
     then
-      sed 's#-install_name /usr/lib/libc++abi.dylib#-install_name $InstDir/lib/libc++abi.dylib#g' -i' ' buildit  
+      sed -e 's#-install_name /usr/lib/libc++abi.dylib#-install_name $InstDir/lib/libc++abi.dylib#g' -i' ' buildit  
     elif [ "$arch" = "linux" ];
     then
       if [ "$stage" = "1" ];
