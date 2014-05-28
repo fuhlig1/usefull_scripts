@@ -1,5 +1,5 @@
---- CMakeLists.txt_orig	2014-05-26 07:55:14.206402000 +0100
-+++ CMakeLists.txt	2014-05-26 07:56:48.210402000 +0100
+--- projects/libcxx/lib/CMakeLists.txt_orig	2014-05-26 07:55:14.206402000 +0100
++++ projects/libcxx/lib/CMakeLists.txt	2014-05-26 07:56:48.210402000 +0100
 @@ -36,7 +36,7 @@
  endif()
  
