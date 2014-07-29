@@ -11,7 +11,7 @@ version=34
 version_full=3.4
 
 tmpDir=/tmp/build_llvm/
-InstDir=/home/devops/compiler/llvm
+InstDir=/opt/compiler/llvm
 
 # unset environment variables
 unset CFLAGS
@@ -29,6 +29,7 @@ main() {
   check_architecture
   check_compiler
   bootstrap_settings
+  exit
   if [ "$bootstrap" = "yes" ];
   then 
     download_llvm_core
@@ -95,6 +96,7 @@ usage() {
 }
 
 stage2_settings() {
+  cmake_build_type=Release
   stage=2
   cc=$InstDir/bin/clang
   cxx=$InstDir/bin/clang++
@@ -105,7 +107,7 @@ stage2_settings() {
   cxxabi_include_path=$InstDir/include/cxxabi
   cxxabi_lib_path=$InstDir/lib
 
-  cxxflags="-std=c++11 -stdlib=libc++" 
+  cxxflags="-std=c++11 -stdlib=libc++ -O3" 
   ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
 
   if [ "$arch" = "linux" ]; then
@@ -137,6 +139,7 @@ stage2_settings() {
 }
 
 stage1_settings() {
+  cmake_build_type=Release
   stage=1
   version=$version_final 
   version_full=$version_full_final
@@ -183,20 +186,21 @@ stage1_settings() {
 
 # Define directories for bootstrap installation
 bootstrap_settings() {
+  cmake_build_type=Release
   InstDirBackup=$InstDir
   version_final=$version
   version_full_final=$version_full
-  local version_tmp=32
-  local version_tmp_full=3.2
+  local version_tmp=$llvm_version
+  local version_tmp_full=$llvm_version_full
   source_dir=$tmpDir/$version_tmp_full
-  build_dir=$tmpDir/build/$version_tmp_full
+  build_dir=$tmpDir/build/${version_tmp_full}_prestage
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_tmp_full
   InstDir=$tmpInstDir
-  if [ "$boostrap" = "yes" ]; then
+  if [ "$bootstrap" = "yes" ]; then
     echo "So we will first build clang/llvm $version_tmp_full and use this version to compile the final clang/llvm version $version_full."
   fi
-  version=32
-  version_full=3.2
+  version=$llvm_version
+  version_full=$llvm_version_full
 
   if [ "$mac_version" = "10.6" ];
   then
@@ -266,6 +270,8 @@ check_compiler() {
       bootstrap=no
     else
       bootstrap=yes
+      llvm_version_full=3.2
+      llvm_version=32
     fi
   else
     cc=gcc
@@ -273,10 +279,20 @@ check_compiler() {
     compiler_version=$(gcc -dumpversion)
     major=$(echo $compiler_version | cut -d. -f1 ) 
     minor=$(echo $compiler_version | cut -d. -f2) 
+    if [ "$major" -lt 4 ]; then
+      echo "Your compiler is to old. At least gcc major version 4 is needed"
+      exit 1
+    fi    
     bootstrap=yes
+    if [ "$minor" -lt 5 ]; then
+      llvm_version_full=3.2
+      llvm_version=32
+    else
+      llvm_version_full=3.4
+      llvm_version=34
+    fi 
   fi
-  if [ "$bootstrap" = "yes" ];
-  then 
+  if [ "$bootstrap" = "yes" ]; then 
     echo "To be able to compile the libc++ abi code one needs at least Clang 3.2"
     echo "Your compiler $compiler $major.$minor is not able to compile this code."
   fi
@@ -355,7 +371,9 @@ build_llvm() {
   CC=$cc CXX=$cxx \
   CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
   cmake $source_dir/llvm/$version \
-    -DCMAKE_INSTALL_PREFIX=$InstDir $cmakeflags
+    -DCMAKE_INSTALL_PREFIX=$InstDir 
+    -DCMAKE_BUILD_TYPE=$cmake_build_type \
+    $cmakeflags
 
   make -j$ncpu 
   make install
