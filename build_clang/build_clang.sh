@@ -7,8 +7,8 @@
 # At least define the installation dir
 # TODO: Change interface to pass the the temporary and the install dir
 
-version=34
-version_full=3.4
+version=350
+version_full=3.5
 
 tmpDir=/tmp/build_llvm/
 InstDir=/opt/compiler/llvm
@@ -29,7 +29,6 @@ main() {
   check_architecture
   check_compiler
   bootstrap_settings
-  exit
   if [ "$bootstrap" = "yes" ];
   then 
     download_llvm_core
@@ -42,11 +41,9 @@ main() {
   download_llvm_addons
   patch_llvm
 
-  build_cxxabi 
   build_stage1 
 
   stage2_settings
-  build_cxxabi 
   build_stage2
 
   build_oclint
@@ -104,11 +101,12 @@ stage2_settings() {
   build_dir=$tmpDir/build/${version_full}_stage2
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$InstDirBackup/$version_full
-  cxxabi_include_path=$InstDir/include/cxxabi
-  cxxabi_lib_path=$InstDir/lib
+
+#  cxxabi_include_path=$InstDir/include/cxxabi
+#  cxxabi_lib_path=$InstDir/lib
 
   cxxflags="-std=c++11 -stdlib=libc++ -O3" 
-  ldflags="-L$InstDir/lib -Wl,-rpath,$InstDir/lib" 
+  ldflags="-Wl,-rpath,$InstDir/lib" 
 
   if [ "$arch" = "linux" ]; then
 #    export LD_LIBRARY_PATH=$tmpInstDir/lib:$LD_LIBRARY_PATH
@@ -126,16 +124,18 @@ stage2_settings() {
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
   fi
 
-  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
+  cmakeflags="-DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DCMAKE_OSX_ARCHITECTURES=x86_64;i386"   
 
-  if [ "$arch" = "darwin" ]; then
-    cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
-    if [ "$mac_version" = "10.6" ]; then
-      export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
-      ldflags="$ldflags -L$tmpInstDir/lib"
-      cxxflags="$cxxflags -U__STRICT_ANSI__" 
-    fi
-  fi
+#  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
+
+#  if [ "$arch" = "darwin" ]; then
+#    cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
+#    if [ "$mac_version" = "10.6" ]; then
+#      export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
+#      ldflags="$ldflags -L$tmpInstDir/lib"
+#      cxxflags="$cxxflags -U__STRICT_ANSI__" 
+#    fi
+#  fi
 }
 
 stage1_settings() {
@@ -153,11 +153,8 @@ stage1_settings() {
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$tmpInstDir
 
-  cxxabi_include_path=$InstDir/include/cxxabi
-  cxxabi_lib_path=$InstDir/lib
-
-  cxxflags="-stdlib=libstdc++"
-  ldflags="-L$cxxabi_lib_path -Wl,-rpath,$InstDir/lib"
+  cxxflags="-stdlib=libstdc++ -O3"
+  ldflags="-Wl,-rpath,$InstDir/lib"
 
   if [ "$arch" = "linux" ]; then
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
@@ -173,15 +170,15 @@ stage1_settings() {
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
   fi
 
-  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
+  cmakeflags="-DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DCMAKE_OSX_ARCHITECTURES=x86_64;i386"   
 
-  if [ "$arch" = "darwin" ]; then
-    cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
-    if [ "$mac_version" = "10.6" ]; then
-      cxxflags="$cxxflags -U__STRICT_ANSI__"
-      cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
-    fi
-  fi  
+#  if [ "$arch" = "darwin" ]; then
+#    cmakeflags="IBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
+#    if [ "$mac_version" = "10.6" ]; then
+#      cxxflags="$cxxflags -U__STRICT_ANSI__"
+#      cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
+#    fi
+#  fi  
 }
 
 # Define directories for bootstrap installation
@@ -212,91 +209,112 @@ bootstrap_settings() {
   sleep 2
 }
 
-# check if the used compiler used if either gcc or clang,
-# if the compiler is really available, and if the installed
-# compiler version is not to old to compile clang/llvm
-# At least clang 3.2 or gcc 4.7 is needed to 
-check_compiler() {
-  
-  local compiler=$(basename "$CC")
-  if [ -z "$CC" ];
-  then
-    compiler=gcc
-  fi
-  if [ "$compiler" != "clang" -a "$compiler" != "gcc" ];
-  then
-    echo "The script only works with clang or gcc."
-    usage
-  else
-    local answer
-    local no_program
-    local no_program1
-    answer=$(which $compiler)
+function is_in_path {
+    # This function checks if a file exists in the $PATH.
+    # To do so it uses which.
+    # There are several versions of which available with different
+    # return values. Either it is "" or "no searched program in PATH" or
+    # "/usr/bin/which: no <searched file>".
+    # To check for all differnt versions check if the return statement is 
+    # not "".
+    # If it is not "" check if the return value starts with no or have
+    # the string "no <searched file> in the return string. If so set
+    # return value to "". So all negative return statements go to "".
+    # If program is found in Path return 1, else return 0.
+
+    searched_program=$1
+    answer=$(which $searched_program)
     if [ "$answer" != "" ];
     then
-      no_program=$(which $compiler | grep -c '^no' )
-      no_program1=$(which $compiler | grep -c "^no $compiler")
+      no_program=$(which $searched_program | grep -c '^no' )
+      no_program1=$(which $searched_program | grep -c "^no $searched_program")
       if [ "$no_program" != "0" -o "$no_program1" != "0" ];
       then
-        answer=""  
+        answer=""
       fi
     fi
-    if [ "$answer" == "" ];
-    then
-      echo "Could not find compiler $compiler."
-      usage
-    fi
-  fi
 
-  local compiler_version
-  local minor
-  local major
-  bootstrap=no
-
-  if [ "$compiler" = "clang" ];
-  then
-    cc=clang
-    cxx=clang++
-    compiler_version=$(clang -v 2>&1 | sed -n 1p | cut -d' ' -f 3)
-    if [ "$compiler_version" = "version" ]; # we are on mac
+    if [ "$answer" != "" ];
     then
-      compiler_version=$(clang -v 2>&1 | sed -n 1p | cut -d' ' -f 9 | cut -c1-3)
-    fi
-    major=$(echo $compiler_version | cut -d. -f1 ) 
-    minor=$(echo $compiler_version | cut -d. -f2) 
-
-    if [ $major -eq 3 -a $minor -ge 2 ];
-    then
-      bootstrap=no
+      return 1
     else
-      bootstrap=yes
-      llvm_version_full=3.2
-      llvm_version=32
+      return 0
     fi
-  else
-    cc=gcc
-    cxx=g++
-    compiler_version=$(gcc -dumpversion)
-    major=$(echo $compiler_version | cut -d. -f1 ) 
-    minor=$(echo $compiler_version | cut -d. -f2) 
-    if [ "$major" -lt 4 ]; then
-      echo "Your compiler is to old. At least gcc major version 4 is needed"
-      exit 1
-    fi    
-    bootstrap=yes
-    if [ "$minor" -lt 5 ]; then
-      llvm_version_full=3.2
-      llvm_version=32
+}
+
+
+# Check if on of the supported compilers is present. First check for clang and then
+# for gcc. Use the first one which is found. If none is found print the usage message.
+# Check the compiler version to decide if we first have to bootstrap an older version
+# of Clang.
+# At least clang 3.2 or gcc 4.7 is needed to 
+check_compiler() {
+
+    is_in_path clang
+    result=$?
+    if [ "$result" = "0" ]; then
+	is_in_path gcc
+	result=$?
+	if [ "$result" = "0" ]; then
+	    echo "The script only works with clang or gcc."
+            echo "The script could neither find clang nor gcc"
+	    usage
+        else
+            compiler=gcc
+	fi
     else
-      llvm_version_full=3.4
-      llvm_version=34
+	compiler=clang
+    fi
+    echo "Found compiler $compiler"
+    
+    local compiler_version
+    local minor
+    local major
+    bootstrap=no
+    
+    if [ "$compiler" = "clang" ];
+    then
+	cc=clang
+	cxx=clang++
+	compiler_version=$(clang -v 2>&1 | sed -n 1p | cut -d' ' -f 3)
+	if [ "$compiler_version" = "version" ]; # we are on mac
+	then
+	    compiler_version=$(clang -v 2>&1 | sed -n 1p | cut -d' ' -f 9 | cut -c1-3)
+	fi
+	major=$(echo $compiler_version | cut -d. -f1 ) 
+	minor=$(echo $compiler_version | cut -d. -f2) 
+	
+	if [ $major -eq 3 -a $minor -ge 2 ];
+	then
+	    bootstrap=no
+	else
+	    bootstrap=yes
+	    llvm_version_full=3.2
+	    llvm_version=32
+	fi
+    else
+	cc=gcc
+	cxx=g++
+	compiler_version=$(gcc -dumpversion)
+	major=$(echo $compiler_version | cut -d. -f1 ) 
+	minor=$(echo $compiler_version | cut -d. -f2) 
+	if [ "$major" -lt 4 ]; then
+	    echo "Your compiler is to old. At least gcc major version 4 is needed"
+	    exit 1
+	fi    
+	bootstrap=yes
+	if [ "$minor" -lt 5 ]; then
+	    llvm_version_full=3.2
+	    llvm_version=32
+	else
+	    llvm_version_full=3.4
+	    llvm_version=34
+	fi 
+    fi
+    if [ "$bootstrap" = "yes" ]; then 
+	echo "To be able to compile the libc++ abi code one needs at least Clang 3.2"
+	echo "Your compiler $compiler $major.$minor is not able to compile this code."
     fi 
-  fi
-  if [ "$bootstrap" = "yes" ]; then 
-    echo "To be able to compile the libc++ abi code one needs at least Clang 3.2"
-    echo "Your compiler $compiler $major.$minor is not able to compile this code."
-  fi
-
 }
 
 # test for architecture
@@ -347,13 +365,16 @@ download_llvm_core() {
     if [ ! -d libcxx ]; then
       svn co http://llvm.org/svn/llvm-project/libcxx/tags/RELEASE_$version/final libcxx
     fi
+    if [ ! -d libcxxabi ]; then
+      svn co http://llvm.org/svn/llvm-project/libcxxabi/tags/RELEASE_$version/final libcxxabi
+    fi
   fi 
 }
 
 download_llvm_addons() {
   cd $source_dir/llvm/$version/tools/clang/tools/
   if [ ! -d  extra ]; then
-    svn co http://llvm.org/svn/llvm-project/clang-tools-extra/branches/release_$version extra
+    svn co http://llvm.org/svn/llvm-project/clang-tools-extra/tags/RELEASE_$version/final extra
   fi
 
   if [ ! -d  include-what-you-use ]; then
@@ -371,7 +392,7 @@ build_llvm() {
   CC=$cc CXX=$cxx \
   CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
   cmake $source_dir/llvm/$version \
-    -DCMAKE_INSTALL_PREFIX=$InstDir 
+    -DCMAKE_INSTALL_PREFIX=$InstDir \
     -DCMAKE_BUILD_TYPE=$cmake_build_type \
     $cmakeflags
 
@@ -403,10 +424,11 @@ build_stage1() {
 patch_llvm() {
   if [ ! -f $source_dir/llvm/$version/patched ]; then
     cd $source_dir/llvm/$version/
-    patch -p0 < $script_dir/llvm_core.patch
-    patch -p0 < $script_dir/llvm_addons.patch
+    patch -p0 < $script_dir/llvm_core_$version.patch
+    patch -p0 < $script_dir/llvm_addons_$version.patch
     if [ "$arch" = "darwin" ]; then
-      patch -p0 < $script_dir/llvm_libcxx_macosx.patch
+      patch -p0 < $script_dir/llvm_libcxx_macosx_$version.patch
+      patch -p0 < $script_dir/libc++abi_$version.patch
       if [ "$mac_version" = "10.6" ];
       then
         patch -p0 < $script_dir/llvm_libcxx_macosx_10_6_1.patch
@@ -432,57 +454,17 @@ build_stage2() {
   fi
 }
 
-# compile libcxxabi which is needed for a standalone version of libc++
-# information taken from
-# http://dragoonsheir.wordpress.com/2013/03/16/wayland-and-c11-programming-part-1-of-n/
-build_cxxabi() {
-  set -xv
-  if [ ! -f $InstDir/lib/$cxxabi_checkfile ]; then
-
-    mkdir -p $source_dir/libc++/$stage
-    cd $source_dir/libc++/$stage
-
-    svn co -r 200202 http://llvm.org/svn/llvm-project/libcxxabi/trunk libcxxabi
-    cd libcxxabi/lib
-
-    if [ "$arch" = "darwin" ];
-    then
-      sed -e 's#-install_name /usr/lib/libc++abi.dylib#-install_name $InstDir/lib/libc++abi.dylib#g' -i' ' buildit  
-    elif [ "$arch" = "linux" ];
-    then
-      if [ "$stage" = "1" ];
-      then
-        sed 's#-std=c++11 -stdlib=libc++#-std=c++11 -stdlib=libstdc++#g' -i buildit  
-      fi
-      patch -p0 < $script_dir/libc++abi_linux.patch
-    fi    
-
-    InstDir=$InstDir \
-      CC=$cc CXX=$cxx \
-      CPATH=$source_dir/llvm/$version/projects/libcxx/include \
-      TRIPLE=$triple ./buildit
-
-  
-    if [ ! -f $cxxabi_checkfile ]; then
-      exit
-    fi  
-
-    mkdir -p $InstDir/include/cxxabi
-    cp -r ../include/* $InstDir/include/cxxabi
- 
-    mkdir -p $InstDir/lib
-    cp  $cxxabi_checkfile $InstDir/lib
-  fi
-  set +xv
-}
 
 build_oclint() {
+
   if [ ! -f $InstDir/bin/oclint ]; 
   then
     cd $source_dir
-    git clone https://github.com/oclint/oclint
+    if [ ! -d oclint ]; then
+      git clone https://github.com/oclint/oclint
+    fi
     cd oclint
-    git checkout release_08
+    git checkout 5dba3452a80a0531c9f58e967586b83684668ae2
   
     if [ "$arch" = "linux" ];
     then
@@ -562,8 +544,8 @@ build_oclint() {
     cp $source_dir/oclint/build/oclint-reporters/reporters.dl/*.$ext $InstDir/lib/oclint/reporters
     mkdir -p $InstDir/lib/oclint/rules
     cp $source_dir/oclint/build/oclint-rules/rules.dl/*.$ext $InstDir/lib/oclint/rules
-    cp $source_dir/oclint/build/oclint-driver/bin/oclint-0.8 $InstDir/bin
-    ln -s $InstDir/bin/oclint-0.8 $InstDir/bin/oclint
+    cp $source_dir/oclint/build/oclint-driver/bin/oclint-0.9 $InstDir/bin
+    ln -s $InstDir/bin/oclint-0.9 $InstDir/bin/oclint
     cd $source_dir/oclint/
     git clone https://github.com/oclint/oclint-json-compilation-database.git
     cp $source_dir/oclint/oclint-json-compilation-database/oclint-json-compilation-database $InstDir/bin
