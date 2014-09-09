@@ -396,6 +396,14 @@ build_llvm() {
     -DCMAKE_BUILD_TYPE=$cmake_build_type \
     $cmakeflags
 
+  # if building in parallel libc++ depends on libc++abi, so we have to build this first
+  if [ "$bootstrap" = "no" ]; then 
+    cd projects/libcxxabi
+    make -j$ncpu 
+    make install
+    cd ../..
+  fi
+
   make -j$ncpu 
   make install
   
@@ -565,7 +573,6 @@ fix_library_pathes() {
 
 main "$@"
 
-echo "Should not come here"
 exit
 
 
