@@ -356,11 +356,12 @@ download_llvm_core() {
   fi
 
   cd $source_dir/llvm/$version/projects
-  if [ "$version" = "32" ];
+  if [ "$bootstrap" = "yes" ];
   then
-    if [ ! -d libcxx ]; then
-      svn co http://llvm.org/svn/llvm-project/libcxx/branches/release_$version libcxx
-    fi
+#    if [ ! -d libcxx ]; then
+#      svn co http://llvm.org/svn/llvm-project/libcxx/branches/release_$version libcxx
+#    fi
+   echo ""
   else  
     if [ ! -d libcxx ]; then
       svn co http://llvm.org/svn/llvm-project/libcxx/tags/RELEASE_$version/final libcxx
