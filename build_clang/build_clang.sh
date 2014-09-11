@@ -11,7 +11,7 @@ version=350
 version_full=3.5
 
 tmpDir=/tmp/build_llvm/
-InstDir=/opt/compiler/llvm
+InstDir=/data.local1/uhlig/compiler/llvm
 
 # unset environment variables
 unset CFLAGS
@@ -31,22 +31,19 @@ main() {
   bootstrap_settings
   if [ "$bootstrap" = "yes" ];
   then 
-    download_llvm_core
-    build_pre_stage1
+    download_llvm_core || exit
+    build_pre_stage1 || exit
   fi
-
- 
   stage1_settings
-  download_llvm_core
-  download_llvm_addons
-  patch_llvm
+  download_llvm_core || exit
+  download_llvm_addons || exit
+  patch_llvm || exit
 
-  build_stage1 
-
+  build_stage1 || exit
   stage2_settings
-  build_stage2
+  build_stage2 || exit
 
-  build_oclint
+  build_oclint || exit
 
   if [ "$mac_version" = "10.6" ];
   then
@@ -102,15 +99,15 @@ stage2_settings() {
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$InstDirBackup/$version_full
 
-#  cxxabi_include_path=$InstDir/include/cxxabi
+  cxxabi_include_path=$InstDir/include/cxxabi
 #  cxxabi_lib_path=$InstDir/lib
 
   cxxflags="-std=c++11 -stdlib=libc++ -O3" 
-  ldflags="-Wl,-rpath,$InstDir/lib" 
+  ldflags="-Wl,-rpath,$InstDir/lib " 
 
   if [ "$arch" = "linux" ]; then
 #    export LD_LIBRARY_PATH=$tmpInstDir/lib:$LD_LIBRARY_PATH
-    ldflags="$ldflags -lc++abi"
+#    ldflags="$ldflags -lc++abi"
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
     if [ $count -eq 1 ]; then
       cIncDirs=$InstDir/include/c++/v1:/usr/include 
@@ -124,18 +121,20 @@ stage2_settings() {
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
   fi
 
-  cmakeflags="-DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DCMAKE_OSX_ARCHITECTURES=x86_64;i386"   
+  cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path"   
+
 
 #  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
 
-#  if [ "$arch" = "darwin" ]; then
+  if [ "$arch" = "darwin" ]; then
+    cmakeflags="$cmakeflags -DCMAKE_OSX_ARCHITECTURES=x86_64;i386"   
 #    cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
 #    if [ "$mac_version" = "10.6" ]; then
 #      export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
 #      ldflags="$ldflags -L$tmpInstDir/lib"
 #      cxxflags="$cxxflags -U__STRICT_ANSI__" 
 #    fi
-#  fi
+  fi
 }
 
 stage1_settings() {
@@ -146,6 +145,7 @@ stage1_settings() {
   if [ "$bootstrap" = "yes" ]; then
     cc=$tmpInstDir/bin/clang
     cxx=$tmpInstDir/bin/clang++
+    bootstrap=no
   fi
   source_dir=$tmpDir/$version_full
   build_dir=$tmpDir/build/$version_full
@@ -153,10 +153,16 @@ stage1_settings() {
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$tmpInstDir
 
-  cxxflags="-stdlib=libstdc++ -O3"
   ldflags="-Wl,-rpath,$InstDir/lib"
-
+  cmakeflags=""
+  cxxflags=""
+#  cmakedebugflags="-debug --trace --debug-trycompile"
+  cmakedugflags=""
+  
   if [ "$arch" = "linux" ]; then
+    cmakeflags="$cmakeflags -DLIBCXXABI_ENABLE_SHARED=off"
+    cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11 -lstdc++"
+    ldflags="$ldflags -lstdc++"
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
     if [ $count -eq 1 ]; then
       cIncDirs=$InstDir/include/c++/v1:/usr/include 
@@ -170,15 +176,18 @@ stage1_settings() {
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
   fi
 
-  cmakeflags="-DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DCMAKE_OSX_ARCHITECTURES=x86_64;i386"   
+  cmakeflags="$cmakeflags -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on"   
 
-#  if [ "$arch" = "darwin" ]; then
-#    cmakeflags="IBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
+  if [ "$arch" = "darwin" ]; then
+    cxxflags="-stdlib=libstdc++ -O3"
+
+    cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DCMAKE_OSX_ARCHITECTURES=x86_64;i386"
+#    cmakeflags="LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
 #    if [ "$mac_version" = "10.6" ]; then
 #      cxxflags="$cxxflags -U__STRICT_ANSI__"
 #      cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
 #    fi
-#  fi  
+  fi  
 }
 
 # Define directories for bootstrap installation
@@ -191,7 +200,7 @@ bootstrap_settings() {
   local version_tmp_full=$llvm_version_full
   source_dir=$tmpDir/$version_tmp_full
   build_dir=$tmpDir/build/${version_tmp_full}_prestage
-  tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_tmp_full
+  tmpInstDir=$tmpDir/compiler_tmp/llvm/${version_tmp_full}_bootstrap
   InstDir=$tmpInstDir
   if [ "$bootstrap" = "yes" ]; then
     echo "So we will first build clang/llvm $version_tmp_full and use this version to compile the final clang/llvm version $version_full."
@@ -301,14 +310,14 @@ check_compiler() {
 	if [ "$major" -lt 4 ]; then
 	    echo "Your compiler is to old. At least gcc major version 4 is needed"
 	    exit 1
-	fi    
+	fi         
 	bootstrap=yes
-	if [ "$minor" -lt 5 ]; then
+	if [ "$minor" -lt 7 ]; then
 	    llvm_version_full=3.2
 	    llvm_version=32
 	else
-	    llvm_version_full=3.4
-	    llvm_version=34
+	    llvm_version_full=3.5
+	    llvm_version=350
 	fi 
     fi
     if [ "$bootstrap" = "yes" ]; then 
@@ -328,14 +337,14 @@ check_architecture() {
     ncpu=$(cat /proc/cpuinfo | grep processor | wc -l)
     triple=-linux-
     ext=so
-    cxxabi_checkfile=libc++abi.a
+#    cxxabi_checkfile=libc++abi.a
   elif [ "$arch" = "darwin" ];
   then
     mac_version=$(sw_vers -productVersion | cut -d . -f 1-2)
     ncpu=$(sysctl -n hw.ncpu)
     triple=-apple-
     ext=dylib
-    cxxabi_checkfile=libc++abi.$ext
+#    cxxabi_checkfile=libc++abi.$ext
   else
     echo "The script supports only linux and MacOSX (darwin)."
   fi
@@ -390,18 +399,22 @@ download_llvm_addons() {
 
 build_llvm() {
 
+  set -xv
   CC=$cc CXX=$cxx \
   CXXFLAGS=$cxxflags LDFLAGS=$ldflags \
-  cmake $source_dir/llvm/$version \
+  cmake $cmakedebugflags  $source_dir/llvm/$version \
     -DCMAKE_INSTALL_PREFIX=$InstDir \
     -DCMAKE_BUILD_TYPE=$cmake_build_type \
     $cmakeflags
-
+  set +xv
+  
   # if building in parallel libc++ depends on libc++abi, so we have to build this first
   if [ "$bootstrap" = "no" ]; then 
     cd projects/libcxxabi
     make -j$ncpu 
     make install
+    mkdir -p $InstDir/include/cxxabi
+    cp -r $source_dir/llvm/$version/projects/libcxxabi/include/* $InstDir/include/cxxabi
     cd ../..
   fi
 
@@ -416,6 +429,7 @@ build_llvm() {
 
 build_pre_stage1() {
    if [ ! -f $tmpInstDir/bin/clang ]; then
+    echo "** Build prestage **"
     mkdir -p $build_dir
     cd $build_dir
     build_llvm
@@ -424,6 +438,7 @@ build_pre_stage1() {
 
 build_stage1() {
   if [ ! -f $InstDir/bin/clang ]; then
+    echo "** Build final compiler 1 time"
     mkdir -p $build_dir
     cd $build_dir
     build_llvm
@@ -453,6 +468,7 @@ patch_llvm() {
 build_stage2() {
 
   if [ ! -f $InstDir/bin/clang ]; then
+    echo "** Build final compiler 2 time"
     mkdir $build_dir
     cd $build_dir
   
