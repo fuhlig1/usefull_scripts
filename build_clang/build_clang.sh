@@ -99,7 +99,7 @@ stage2_settings() {
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$InstDirBackup/$version_full
 
-  cxxabi_include_path=$InstDir/include/cxxabi
+#  cxxabi_include_path=$InstDir/include/cxxabi
 #  cxxabi_lib_path=$InstDir/lib
 
   cxxflags="-std=c++11 -stdlib=libc++ -O3" 
@@ -121,7 +121,7 @@ stage2_settings() {
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
   fi
 
-  cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path"   
+  cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DLIBCXX_CXX_ABI=libcxxabi-in-tree"   
 
 
 #  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
@@ -150,6 +150,8 @@ stage1_settings() {
   source_dir=$tmpDir/$version_full
   build_dir=$tmpDir/build/$version_full
 
+#  cxxabi_include_path=$source_dir/llvm/$version_full/projects/libcxxabi/include
+
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$tmpInstDir
 
@@ -161,8 +163,9 @@ stage1_settings() {
   
   if [ "$arch" = "linux" ]; then
     cmakeflags="$cmakeflags -DLIBCXXABI_ENABLE_SHARED=off"
-    cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11 -lstdc++"
-    ldflags="$ldflags -lstdc++"
+    cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11"
+#    cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11 -lstdc++"
+#    ldflags="$ldflags -lstdc++"
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
     if [ $count -eq 1 ]; then
       cIncDirs=$InstDir/include/c++/v1:/usr/include 
@@ -176,7 +179,8 @@ stage1_settings() {
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
   fi
 
-  cmakeflags="$cmakeflags -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on"   
+  cmakeflags="$cmakeflags -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DLIBCXX_CXX_ABI=libcxxabi-in-tree"   
+#  cmakeflags="$cmakeflags -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on"   
 
   if [ "$arch" = "darwin" ]; then
     cxxflags="-stdlib=libstdc++ -O3"
@@ -412,6 +416,7 @@ build_llvm() {
   if [ "$bootstrap" = "no" ]; then 
     cd projects/libcxxabi
     make -j$ncpu 
+    mkdir -p $InstDir
     make install
     mkdir -p $InstDir/include/cxxabi
     cp -r $source_dir/llvm/$version/projects/libcxxabi/include/* $InstDir/include/cxxabi

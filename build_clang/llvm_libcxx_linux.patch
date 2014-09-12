@@ -9,3 +9,26 @@
  append_if(libraries LIBCXX_HAS_PTHREAD_LIB pthread)
  append_if(libraries LIBCXX_HAS_C_LIB c)
  append_if(libraries LIBCXX_HAS_M_LIB m)
+--- projects/libcxx/CMakeLists.txt.orig	2014-09-12 09:49:05.437119614 +0200
++++ projects/libcxx/CMakeLists.txt	2014-09-12 10:16:26.372906451 +0200
+@@ -44,7 +44,7 @@
+ option(LIBCXX_ENABLE_SHARED "Build libc++ as a shared library." ON)
+ option(LIBCXX_INSTALL_SUPPORT_HEADERS "Install libc++ support headers." ON)
+ 
+-set(CXXABIS none libcxxabi libcxxrt libstdc++ libsupc++)
++set(CXXABIS none libcxxabi libcxxrt libstdc++ libsupc++ libcxxabi-in-tree)
+ if (NOT DEFINED LIBCXX_CXX_ABI)
+   set(LIBCXX_CXX_ABI "none")
+ endif()
+@@ -149,6 +149,11 @@
+   setup_abi_lib("LIBCXX_LIBCXXABI_INCLUDE_PATHS" ""
+     "c++abi" "cxxabi.h" ""
+     )
++elseif ("${LIBCXX_CXX_ABI}" STREQUAL "libcxxabi-in-tree")
++  set(LIBCXX_LIBCXXABI_INCLUDE_PATHS "${CMAKE_SOURCE_DIR}/projects/libcxxabi/include")
++  setup_abi_lib("LIBCXX_LIBCXXABI_INCLUDE_PATHS" ""
++    "cxxabi" "cxxabi.h" ""
++  )
+ elseif ("${LIBCXX_CXX_ABI}" STREQUAL "libcxxrt")
+   setup_abi_lib("LIBCXX_LIBCXXRT_INCLUDE_PATHS" "-DLIBCXXRT"
+     "cxxrt" "cxxabi.h;unwind.h;unwind-arm.h;unwind-itanium.h" ""
