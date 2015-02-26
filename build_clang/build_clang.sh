@@ -7,11 +7,11 @@
 # At least define the installation dir
 # TODO: Change interface to pass the the temporary and the install dir
 
-version=350
-version_full=3.5
+version=360
+version_full=3.6
 
 tmpDir=/tmp/build_llvm/
-InstDir=/data.local1/uhlig/compiler/llvm
+InstDir=/cvmfs/it.gsi.de/compiler/llvm
 
 # unset environment variables
 unset CFLAGS
@@ -121,7 +121,8 @@ stage2_settings() {
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
   fi
 
-  cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DLIBCXX_CXX_ABI=libcxxabi-in-tree"   
+  cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on"
+  # -DLIBCXX_CXX_ABI=libcxxabi-in-tree"   
 
 
 #  cmakeflags="-DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS=$cxxabi_include_path -DC_INCLUDE_DIRS=$cIncDirs"   
@@ -179,7 +180,8 @@ stage1_settings() {
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
   fi
 
-  cmakeflags="$cmakeflags -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DLIBCXX_CXX_ABI=libcxxabi-in-tree"   
+  cmakeflags="$cmakeflags -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on"
+  # -DLIBCXX_CXX_ABI=libcxxabi-in-tree"   
 #  cmakeflags="$cmakeflags -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on"   
 
   if [ "$arch" = "darwin" ]; then
@@ -392,7 +394,7 @@ download_llvm_addons() {
   fi
 
   if [ ! -d  include-what-you-use ]; then
-    svn co http://include-what-you-use.googlecode.com/svn/branches/clang_$version_full include-what-you-use
+    svn co http://include-what-you-use.googlecode.com/svn/trunk include-what-you-use
   fi
 
   cd $source_dir/llvm/$version/projects
@@ -463,7 +465,7 @@ patch_llvm() {
         patch -p0 < $script_dir/llvm_libcxx_macosx_10_6_1.patch
       fi
     else
-      patch -p0 < $script_dir/llvm_libcxx_linux.patch
+      patch -p0 < $script_dir/llvm_libcxx_linux_$version.patch
     fi     
     touch $source_dir/llvm/$version/patched
   fi
@@ -494,8 +496,9 @@ build_oclint() {
       git clone https://github.com/oclint/oclint
     fi
     cd oclint
-    git checkout 5dba3452a80a0531c9f58e967586b83684668ae2
-  
+#    git checkout 5dba3452a80a0531c9f58e967586b83684668ae2
+    git checkout master
+     
     if [ "$arch" = "linux" ];
     then
       sed 's/libstdc++/libc++/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
