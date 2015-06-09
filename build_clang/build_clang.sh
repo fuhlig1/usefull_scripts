@@ -7,8 +7,8 @@
 # At least define the installation dir
 # TODO: Change interface to pass the the temporary and the install dir
 
-version=360
-version_full=3.6
+version=361
+version_full=3.6.1
 
 tmpDir=/tmp/build_llvm/
 InstDir=/cvmfs/it.gsi.de/compiler/llvm
@@ -37,13 +37,17 @@ main() {
   stage1_settings
   download_llvm_core || exit
   download_llvm_addons || exit
+
   patch_llvm || exit
 
   build_stage1 || exit
+  set -xv
   stage2_settings
   build_stage2 || exit
 
   build_oclint || exit
+  set +xv  
+  exit
 
   if [ "$mac_version" = "10.6" ];
   then
@@ -60,6 +64,7 @@ main() {
   echo " export CXX=$InstDir/bin/clang++"
   echo "###"
 
+  
 }
 
 usage() {
@@ -394,6 +399,7 @@ download_llvm_addons() {
   fi
 
   if [ ! -d  include-what-you-use ]; then
+    #TODO: maybe use branches or tags instead of trunk
     svn co http://include-what-you-use.googlecode.com/svn/trunk include-what-you-use
   fi
 
@@ -497,8 +503,9 @@ build_oclint() {
     fi
     cd oclint
 #    git checkout 5dba3452a80a0531c9f58e967586b83684668ae2
-    git checkout master
-     
+    git checkout master      
+    patch -p0 < $script_dir/oclint_$version.patch
+           
     if [ "$arch" = "linux" ];
     then
       sed 's/libstdc++/libc++/g' -i'' oclint-core/cmake/OCLintConfig.cmake 

@@ -1,0 +1,11 @@
+--- projects/libcxx/lib/CMakeLists.txt_orig	2015-02-26 16:42:16.825886538 +0100
++++ projects/libcxx/lib/CMakeLists.txt	2015-02-26 16:42:46.333119745 +0100
+@@ -39,7 +39,7 @@
+ endif()
+ 
+ # Generate library list.
+-set(libraries ${LIBCXX_CXX_ABI_LIBRARY})
++set(libraries -Wl,--whole-archive ${LIBCXX_CXX_ABI_LIBRARY} -Wl,--no-whole-archive)
+ append_if(libraries LIBCXX_HAS_PTHREAD_LIB pthread)
+ append_if(libraries LIBCXX_HAS_C_LIB c)
+ append_if(libraries LIBCXX_HAS_M_LIB m)
