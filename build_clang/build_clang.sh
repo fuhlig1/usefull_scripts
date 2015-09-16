@@ -7,11 +7,11 @@
 # At least define the installation dir
 # TODO: Change interface to pass the the temporary and the install dir
 
-version=361
-version_full=3.6.1
+version=370
+version_full=3.7
 
 tmpDir=/tmp/build_llvm/
-InstDir=/cvmfs/it.gsi.de/compiler/llvm
+InstDir=/opt/compiler/llvm
 
 # unset environment variables
 unset CFLAGS
@@ -40,11 +40,14 @@ main() {
 
   patch_llvm || exit
 
+#  exit
+    
   build_stage1 || exit
   set -xv
+#  exit
   stage2_settings
   build_stage2 || exit
-
+#exit
   build_oclint || exit
   set +xv  
   exit
@@ -434,10 +437,6 @@ build_llvm() {
   make -j$ncpu 
   make install
   
-  # create symbolic links for cc and c++ 
-  cd $tmpInstDir/bin
-  ln -s clang cc
-  ln -s clang++ c++
 }
 
 build_pre_stage1() {
@@ -446,6 +445,11 @@ build_pre_stage1() {
     mkdir -p $build_dir
     cd $build_dir
     build_llvm
+
+    # create symbolic links for cc and c++ 
+    cd $tmpInstDir/bin
+    ln -s clang cc
+    ln -s clang++ c++
   fi
 }
 
@@ -489,6 +493,12 @@ build_stage2() {
     mkdir -p $InstDir/bin     
     cp -r $source_dir/llvm/$version/tools/clang/tools/scan-view $InstDir/bin
     cp -r $source_dir/llvm/$version/tools/clang/tools/scan-build $InstDir/bin
+
+    # create symbolic links for cc and c++ 
+    cd $InstDir/bin
+    ln -s clang cc
+    ln -s clang++ c++
+
   fi
 }
 

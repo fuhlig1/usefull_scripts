@@ -1,0 +1,35 @@
+--- tools/clang/lib/Driver/Tools.cpp.orig	2014-09-08 12:39:35.000000000 +0200
++++ tools/clang/lib/Driver/Tools.cpp	2014-09-08 14:29:14.000000000 +0200
+@@ -234,6 +234,17 @@
+   //                and only supported on native toolchains.
+   if (!TC.isCrossCompiling())
+     addDirectoryList(Args, CmdArgs, "-L", "LIBRARY_PATH");
++
++  // Add -L<prefix>/lib to default linker arguments. This is needed to
++  // find libc++ automatically.
++  // On Linux add also -rpath.
++  if (!TC.isCrossCompiling()) {
++    CmdArgs.push_back(Args.MakeArgString("-L" + D.InstalledDir + "/../lib"));
++    if (TC.getTriple().getOS() == llvm::Triple::Linux) {
++      CmdArgs.push_back(Args.MakeArgString("-rpath=" + D.InstalledDir + "/../lib"));
++    }
++  }
++
+ }
+ 
+ /// \brief Determine whether Objective-C automated reference counting is
+--- projects/compiler-rt/CMakeLists.txt	(revision 247838)
++++ projects/compiler-rt/CMakeLists.txt	(working copy)
+@@ -307,9 +307,9 @@
+     set(SANITIZER_MIN_OSX_VERSION ${CMAKE_OSX_DEPLOYMENT_TARGET})
+   else()
+     set(SANITIZER_MIN_OSX_VERSION 10.9)
+-    if(IOSSIM_SDK_DIR)
+-      list(APPEND SANITIZER_COMMON_SUPPORTED_OS iossim)
+-    endif()
++#    if(IOSSIM_SDK_DIR)
++#      list(APPEND SANITIZER_COMMON_SUPPORTED_OS iossim)
++#    endif()
+   endif()
+   if(SANITIZER_MIN_OSX_VERSION VERSION_LESS "10.7")
+     message(FATAL_ERROR "Too old OS X version: ${SANITIZER_MIN_OSX_VERSION}")
