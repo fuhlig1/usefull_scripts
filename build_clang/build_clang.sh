@@ -11,7 +11,7 @@ version=370
 version_full=3.7
 
 tmpDir=/tmp/build_llvm/
-InstDir=/opt/compiler/llvm
+InstDir=/cvmfs/it.gsi.de/compiler/llvm
 
 # unset environment variables
 unset CFLAGS
@@ -111,11 +111,11 @@ stage2_settings() {
 #  cxxabi_lib_path=$InstDir/lib
 
   cxxflags="-std=c++11 -stdlib=libc++ -O3" 
-  ldflags="-Wl,-rpath,$InstDir/lib " 
+  ldflags="-Wl,-rpath,$InstDir/lib -lc++abi" 
 
   if [ "$arch" = "linux" ]; then
-#    export LD_LIBRARY_PATH=$tmpInstDir/lib:$LD_LIBRARY_PATH
-#    ldflags="$ldflags -lc++abi"
+    export LD_LIBRARY_PATH=$tmpInstDir/lib:$LD_LIBRARY_PATH
+    ldflags="$ldflags -lc++abi"
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
     if [ $count -eq 1 ]; then
       cIncDirs=$InstDir/include/c++/v1:/usr/include 
@@ -129,7 +129,7 @@ stage2_settings() {
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
   fi
 
-  cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on"
+  cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on -DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=on"
   # -DLIBCXX_CXX_ABI=libcxxabi-in-tree"   
 
 
@@ -171,8 +171,8 @@ stage1_settings() {
   cmakedugflags=""
   
   if [ "$arch" = "linux" ]; then
-    cmakeflags="$cmakeflags -DLIBCXXABI_ENABLE_SHARED=off"
-    cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11"
+    cmakeflags="$cmakeflags -DLIBCXXABI_ENABLE_SHARED=on"
+    cxxflags="$cxxflags -O3 -stdlib=libc++ -std=c++11"
 #    cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11 -lstdc++"
 #    ldflags="$ldflags -lstdc++"
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
@@ -424,15 +424,15 @@ build_llvm() {
   set +xv
   
   # if building in parallel libc++ depends on libc++abi, so we have to build this first
-  if [ "$bootstrap" = "no" ]; then 
-    cd projects/libcxxabi
-    make -j$ncpu 
-    mkdir -p $InstDir
-    make install
-    mkdir -p $InstDir/include/cxxabi
-    cp -r $source_dir/llvm/$version/projects/libcxxabi/include/* $InstDir/include/cxxabi
-    cd ../..
-  fi
+#  if [ "$bootstrap" = "no" ]; then 
+#    cd projects/libcxxabi
+#    make -j$ncpu 
+#    mkdir -p $InstDir
+#    make install
+#    mkdir -p $InstDir/include/cxxabi
+#    cp -r $source_dir/llvm/$version/projects/libcxxabi/include/* $InstDir/include/cxxabi
+#    cd ../..
+#  fi
 
   make -j$ncpu 
   make install
