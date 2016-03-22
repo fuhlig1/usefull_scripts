@@ -1,0 +1,58 @@
+--- tools/clang/lib/Driver/ToolChains.cpp
++++ tools/clang/lib/Driver/ToolChains.cpp
+@@ -3063,6 +3063,11 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
+                  const ArgList &Args)
+     : Generic_ELF(D, Triple, Args) {
+ 
++  // Fix FreeBSD builtin library search paths.
++  // Look in the prefix before going into /usr/lib. Otherwise we'll wind up
++  // with the wrong libc++.
++  getFilePaths().push_back(getDriver().Dir + "/../lib");
++
+   // When targeting 32-bit platforms, look for '/usr/lib32/crt1.o' and fall
+   // back to '/usr/lib' if it doesn't exist.
+   if ((Triple.getArch() == llvm::Triple::x86 ||
+@@ -3097,7 +3102,7 @@ void FreeBSD::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
+   switch (GetCXXStdlibType(DriverArgs)) {
+   case ToolChain::CST_Libcxx:
+     addSystemInclude(DriverArgs, CC1Args,
+-                     getDriver().SysRoot + "/usr/include/c++/v1");
++                     getDriver().Dir + "/../include/c++/v1");
+     break;
+   case ToolChain::CST_Libstdcxx:
+     addSystemInclude(DriverArgs, CC1Args,
+diff --git a/lib/Driver/Tools.cpp b/lib/Driver/Tools.cpp
+index b7ac24f..ed77e80 100644
+--- tools/clang/lib/Driver/Tools.cpp
++++ tools/clang/lib/Driver/Tools.cpp
+@@ -264,6 +264,17 @@ static void AddLinkerInputs(const ToolChain &TC, const InputInfoList &Inputs,
+   //                and only supported on native toolchains.
+   if (!TC.isCrossCompiling())
+     addDirectoryList(Args, CmdArgs, "-L", "LIBRARY_PATH");
++
++  // Adding -L<prefix>/lib to default linker arguments.
++  // On Linux and FreeBSD, add -rpath.
++  if (!TC.isCrossCompiling()) {
++    CmdArgs.push_back(Args.MakeArgString("-L" + D.InstalledDir + "/../lib"));
++
++    auto os = TC.getTriple().getOS();
++    if (os == llvm::Triple::Linux || os == llvm::Triple::FreeBSD)
++      CmdArgs.push_back(Args.MakeArgString("-rpath=" + D.InstalledDir + "/../lib"));
++  }
++
+ }
+ 
+ /// \brief Determine whether Objective-C automated reference counting is
+@@ -485,6 +496,12 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
+   // OBJCPLUS_INCLUDE_PATH - system includes enabled when compiling ObjC++.
+   addDirectoryList(Args, CmdArgs, "-objcxx-isystem", "OBJCPLUS_INCLUDE_PATH");
+ 
++  // Adding $prefix/include to list of standard include paths.
++  if (!Args.hasArg(options::OPT_nostdlibinc)) {
++    CmdArgs.push_back("-internal-isystem");
++    CmdArgs.push_back(Args.MakeArgString(D.Dir + "/../include"));
++  }
++
+   // Optional AuxToolChain indicates that we need to include headers
+   // for more than one target. If that's the case, add include paths
+   // from AuxToolChain right after include paths of the same kind for

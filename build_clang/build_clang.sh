@@ -7,8 +7,8 @@
 # At least define the installation dir
 # TODO: Change interface to pass the the temporary and the install dir
 
-version=370
-version_full=3.7
+version=38
+version_full=3.8
 
 tmpDir=/tmp/build_llvm/
 InstDir=/opt/compiler/llvm
@@ -31,13 +31,14 @@ main() {
   bootstrap_settings
   if [ "$bootstrap" = "yes" ];
   then 
-    download_llvm_core || exit
+    download_llvm_core_git || exit
     build_pre_stage1 || exit
   fi
   stage1_settings
-  download_llvm_core || exit
-  download_llvm_addons || exit
-
+  download_llvm_core_git || exit
+  download_llvm_addons_git || exit
+  exit
+  
   patch_llvm || exit
 
 #  exit
@@ -52,11 +53,6 @@ main() {
   set +xv  
   exit
 
-  if [ "$mac_version" = "10.6" ];
-  then
-    fix_library_pathes
-  fi
-    
   echo "To use clang as compiler you have to add the following lines to your environment"
   echo "##	#"
   echo " export PATH=$InstDir/bin:\$PATH"
@@ -138,11 +134,6 @@ stage2_settings() {
   if [ "$arch" = "darwin" ]; then
     cmakeflags="$cmakeflags -DCMAKE_OSX_ARCHITECTURES=x86_64;i386"   
 #    cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
-#    if [ "$mac_version" = "10.6" ]; then
-#      export DYLD_LIBRARY_PATH=$tmpInstDir/lib:$DYLD_LIBRARY_PATH
-#      ldflags="$ldflags -L$tmpInstDir/lib"
-#      cxxflags="$cxxflags -U__STRICT_ANSI__" 
-#    fi
   fi
 }
 
@@ -197,10 +188,6 @@ stage1_settings() {
 
     cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DCMAKE_OSX_ARCHITECTURES=x86_64;i386"
 #    cmakeflags="LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
-#    if [ "$mac_version" = "10.6" ]; then
-#      cxxflags="$cxxflags -U__STRICT_ANSI__"
-#      cmakeflags="$cmakeflags -DLIBCXX_LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
-#    fi
   fi  
 }
 
@@ -222,13 +209,6 @@ bootstrap_settings() {
   version=$llvm_version
   version_full=$llvm_version_full
 
-  if [ "$mac_version" = "10.6" ];
-  then
-    cxxflags="-U__STRICT_ANSI__"  
-    ldflags="-Wl,-rpath,$tmpInstDir/lib"
-    cIncDirs=$tmpInstDir/include/c++/v1:/usr/include 
-    cmakeflags="-DC_INCLUDE_DIRS=$cIncDirs"
-  fi
   sleep 2
 }
 
@@ -395,6 +375,46 @@ download_llvm_core() {
   fi 
 }
 
+download_llvm_core_git() {
+
+  mkdir -p $source_dir/llvm
+  cd $source_dir/llvm
+
+  if [ ! -d $version ]; then
+    git clone https://github.com/llvm-mirror/llvm $version
+    cd  $source_dir/llvm/$version
+    git checkout release_$version    
+  fi
+
+  cd $source_dir/llvm/$version/tools
+  if [ ! -d clang ]; then
+    git clone https://github.com/llvm-mirror/clang
+    cd  $source_dir/llvm/$version/tools/clang
+    git checkout release_$version    
+  fi
+
+  cd $source_dir/llvm/$version/projects
+  if [ "$bootstrap" = "yes" ];
+  then
+#    if [ ! -d libcxx ]; then
+#      svn co http://llvm.org/svn/llvm-project/libcxx/branches/release_$version libcxx
+#    fi
+   echo ""
+  else  
+    if [ ! -d libcxx ]; then
+      git clone https://github.com/llvm-mirror/libcxx
+      cd  $source_dir/llvm/$version/projects/libcxx
+      git checkout release_$version    
+    fi
+    cd $source_dir/llvm/$version/projects
+    if [ ! -d libcxxabi ]; then
+      git clone https://github.com/llvm-mirror/libcxxabi
+      cd  $source_dir/llvm/$version/projects/libcxxabi
+      git checkout release_$version    
+    fi
+  fi 
+}
+
 download_llvm_addons() {
   cd $source_dir/llvm/$version/tools/clang/tools/
   if [ ! -d  extra ]; then
@@ -409,6 +429,29 @@ download_llvm_addons() {
   cd $source_dir/llvm/$version/projects
   if [ ! -d compiler-rt ]; then
     svn co http://llvm.org/svn/llvm-project/compiler-rt/tags/RELEASE_$version/final compiler-rt
+  fi  
+}
+
+download_llvm_addons_git() {
+  cd $source_dir/llvm/$version/tools/clang/tools/
+  if [ ! -d  extra ]; then
+    git clone https://github.com/llvm-mirror/clang-tools-extra extra
+    cd  $source_dir/llvm/$version/tools/clang/tools/extra
+    git checkout release_$version    
+  fi
+
+  cd $source_dir/llvm/$version/tools/clang/tools/
+  if [ ! -d  include-what-you-use ]; then
+    git clone https://github.com/include-what-you-use/include-what-you-use
+    cd  $source_dir/llvm/$version/tools/clang/tools/include-what-you-use
+    git checkout clang_$full_version
+  fi
+
+  cd $source_dir/llvm/$version/projects
+  if [ ! -d compiler-rt ]; then
+    git clone https://github.com/llvm-mirror/compiler-rt
+    cd  $source_dir/llvm/$version/projects/compiler-rt
+    git checkout release_$version    
   fi  
 }
 
@@ -470,10 +513,6 @@ patch_llvm() {
     if [ "$arch" = "darwin" ]; then
       patch -p0 < $script_dir/llvm_libcxx_macosx_$version.patch
       patch -p0 < $script_dir/libc++abi_$version.patch
-      if [ "$mac_version" = "10.6" ];
-      then
-        patch -p0 < $script_dir/llvm_libcxx_macosx_10_6_1.patch
-      fi
     else
       patch -p0 < $script_dir/llvm_libcxx_linux_$version.patch
     fi     
@@ -519,14 +558,7 @@ build_oclint() {
     if [ "$arch" = "linux" ];
     then
       sed 's/libstdc++/libc++/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
-    elif [ "$arch" = "darwin" ];
-    then
-      if [ "$mac_version" = "10.6" ];
-      then
-        sed 's/-fPIC"/-fPIC -U__STRICT_ANSI__"/g' -i'' oclint-core/cmake/OCLintConfig.cmake 
-	sed "s|\${OSX_DEVELOPER_ROOT}/Toolchains/XcodeDefault.xctoolchain/usr/lib|$InstDir/include|g" -i'' oclint-core/cmake/OCLintConfig.cmake
     fi
-  fi
 
     mkdir -p build/oclint-core
     cd build/oclint-core
