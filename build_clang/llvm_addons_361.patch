@@ -1,7 +1,0 @@
---- tools/clang/tools/CMakeLists.txt~	2014-01-20 16:31:17.000000000 +0100
-+++ tools/clang/tools/CMakeLists.txt	2014-01-20 16:34:08.000000000 +0100
-@@ -21,3 +21,4 @@
- # to keep the primary Clang repository small and focused.
- # It also may be included by LLVM_EXTERNAL_CLANG_TOOLS_EXTRA_SOURCE_DIR.
- add_llvm_external_project(clang-tools-extra extra)
-+add_subdirectory(include-what-you-use)
