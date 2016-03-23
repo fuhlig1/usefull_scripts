@@ -534,7 +534,7 @@ build_oclint() {
     cd oclint
 #    git checkout 5dba3452a80a0531c9f58e967586b83684668ae2
     git checkout master      
-#    patch -p0 < $script_dir/oclint_$version.patch
+    patch -p0 < $script_dir/oclint_380.patch
            
     if [ "$arch" = "linux" ];
     then
@@ -549,9 +549,7 @@ build_oclint() {
           -D CMAKE_C_COMPILER=$InstDir/bin/clang \
           -D LLVM_ROOT=$InstDir \
           $source_dir/oclint/oclint-core
-#    make -j$ncpu
-make
-    exit
+    make -j$ncpu
       
     cd $source_dir/oclint/build
     mkdir -p oclint-metrics
@@ -609,8 +607,8 @@ make
     cp $source_dir/oclint/build/oclint-reporters/reporters.dl/*.$ext $InstDir/lib/oclint/reporters
     mkdir -p $InstDir/lib/oclint/rules
     cp $source_dir/oclint/build/oclint-rules/rules.dl/*.$ext $InstDir/lib/oclint/rules
-    cp $source_dir/oclint/build/oclint-driver/bin/oclint-0.9 $InstDir/bin
-    ln -s $InstDir/bin/oclint-0.9 $InstDir/bin/oclint
+    cp $source_dir/oclint/build/oclint-driver/bin/oclint-0.10.2 $InstDir/bin
+    ln -s $InstDir/bin/oclint-0.10.2 $InstDir/bin/oclint
     cd $source_dir/oclint/
     git clone https://github.com/oclint/oclint-json-compilation-database.git
     cp $source_dir/oclint/oclint-json-compilation-database/oclint-json-compilation-database $InstDir/bin
