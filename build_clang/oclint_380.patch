@@ -1,0 +1,67 @@
+--- oclint-core/cmake/OCLintConfig.cmake
++++ oclint-core/cmake/OCLintConfig.cmake
+@@ -13,7 +13,7 @@ SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_CXX_LINKER_FLAGS} -fno-rtti")
+ 
+ IF(APPLE)
+     SET(CMAKE_CXX_FLAGS "-std=c++11 -stdlib=libc++ ${CMAKE_CXX_FLAGS}")
+-    INCLUDE_DIRECTORIES(${OSX_DEVELOPER_ROOT}/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1)
++#    INCLUDE_DIRECTORIES(${OSX_DEVELOPER_ROOT}/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1)
+ ELSEIF(MINGW)
+     SET(CMAKE_CXX_FLAGS "-std=gnu++11 ${CMAKE_CXX_FLAGS}")
+ ELSE()
+--- oclint-driver/lib/Driver.cpp
++++ oclint-driver/lib/Driver.cpp
+@@ -249,7 +249,8 @@ static std::vector<std::string> adjustArguments(std::vector<std::string> &unadju
+         clang::tooling::combineAdjusters(
+             clang::tooling::getClangStripOutputAdjuster(),
+             clang::tooling::getClangSyntaxOnlyAdjuster());
+-    return argAdjuster(unadjustedCmdLine);
++            StringRef unused;
++    return argAdjuster(unadjustedCmdLine, unused);
+ }
+ 
+ static void constructCompilersAndFileManagers(std::vector<oclint::CompilerInstance *> &compilers,
+--- oclint-rules/lib/helper/SuppressHelper.cpp
++++ oclint-rules/lib/helper/SuppressHelper.cpp
+@@ -29,8 +29,8 @@ bool markedParentsAsSuppress(const T &node, clang::ASTContext &context, oclint::
+         return false;
+     }
+ 
+-    clang::ast_type_traits::DynTypedNode dynTypedNode = parents.front();
+-    const clang::Decl *aDecl = dynTypedNode.get<clang::Decl>();
++    const clang::ast_type_traits::DynTypedNode* dynTypedNode = parents.begin();
++    const clang::Decl *aDecl = dynTypedNode->get<clang::Decl>();
+     if (aDecl)
+     {
+         if (markedAsSuppress(aDecl, rule))
+@@ -39,7 +39,7 @@ bool markedParentsAsSuppress(const T &node, clang::ASTContext &context, oclint::
+         }
+         return markedParentsAsSuppress(*aDecl, context, rule);
+     }
+-    const clang::Stmt *aStmt = dynTypedNode.get<clang::Stmt>();
++    const clang::Stmt *aStmt = dynTypedNode->get<clang::Stmt>();
+     if (aStmt)
+     {
+         return markedParentsAsSuppress(*aStmt, context, rule);
+--- oclint-rules/rules/design/AvoidDefaultArgumentsOnVirtualMethodsRule.cpp
++++ oclint-rules/rules/design/AvoidDefaultArgumentsOnVirtualMethodsRule.cpp
+@@ -47,7 +47,7 @@ public:
+     virtual void setUpMatcher() override
+     {
+         addMatcher(
+-            methodDecl(isVirtual(), hasAnyParameter(hasDefaultArg()))
++            cxxMethodDecl(isVirtual(), hasAnyParameter(hasDefaultArg()))
+             .bind("cxxMethod"));
+     }
+ };
+--- oclint-rules/rules/design/AvoidPrivateStaticMembersRule.cpp
++++ oclint-rules/rules/design/AvoidPrivateStaticMembersRule.cpp
+@@ -53,7 +53,7 @@ public:
+     virtual void setUpMatcher() override
+     {
+         addMatcher(varDecl(isPrivate(), isStaticDataMember()).bind("field"));
+-        addMatcher(methodDecl(isPrivate(), isStatic()).bind("cxxMethod"));
++        addMatcher(cxxMethodDecl(isPrivate(), isStatic()).bind("cxxMethod"));
+     }
+ };
+ 
