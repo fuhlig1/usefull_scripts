@@ -11,7 +11,7 @@ version=38
 version_full=3.8
 
 tmpDir=/tmp/build_llvm/
-InstDir=/opt/compiler/llvm
+InstDir=/cvmfs/it.gsi.de/compiler/llvm
 
 # unset environment variables
 unset CFLAGS
@@ -149,16 +149,18 @@ stage1_settings() {
   cmakedugflags=""
   
   if [ "$arch" = "linux" ]; then
-    cmakeflags="$cmakeflags -DLIBCXXABI_ENABLE_SHARED=off"
-    cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11"
+#    cmakeflags="$cmakeflags -DLIBCXXABI_ENABLE_SHARED=off"
+#    cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11"
+    cmakeflags="$cmakeflags -DLIBCXXABI_ENABLE_SHARED=on"
+    cxxflags="$cxxflags -O3 -stdlib=libc++ -std=c++11"
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
     if [ $count -eq 1 ]; then
       cIncDirs=$InstDir/include/c++/v1:/usr/include 
     else  
       gccIncDir=$(gcc -print-multiarch)
       gccVersion=$(gcc -dumpversion)
-      cIncDirs=$InstDir/include/c++/v1:/usr/include:/usr/include/$gccIncDir:/usr/include/$gccIncDir/c++/$gccVersion
-      cxxflags="$cxxflags -I/usr/include/$gccIncDir -I/usr/include/$gccIncDir/c++/$gccVersion"
+#      cIncDirs=$InstDir/include/c++/v1:/usr/include:/usr/include/$gccIncDir:/usr/include/$gccIncDir/c++/$gccVersion
+#      cxxflags="$cxxflags -I/usr/include/$gccIncDir -I/usr/include/$gccIncDir/c++/$gccVersion"
     fi
   else  
     cIncDirs=$InstDir/include/c++/v1:/usr/include 
@@ -451,16 +453,17 @@ build_llvm() {
     $cmakeflags
   set +xv
   
+  echo "************** Hier ***********"
   # if building in parallel libc++ depends on libc++abi, so we have to build this first
-#  if [ "$bootstrap" = "no" ]; then 
-#    cd projects/libcxxabi
-#    make -j$ncpu 
-#    mkdir -p $InstDir
-#    make install
-#    mkdir -p $InstDir/include/cxxabi
-#    cp -r $source_dir/llvm/$version/projects/libcxxabi/include/* $InstDir/include/cxxabi
-#    cd ../..
-#  fi
+  if [ "$bootstrap" = "no" ]; then 
+    cd projects/libcxxabi
+    make -j$ncpu 
+    mkdir -p $InstDir
+    make install
+    mkdir -p $InstDir/include/cxxabi
+    cp -r $source_dir/llvm/$version/projects/libcxxabi/include/* $InstDir/include/cxxabi
+    cd ../..
+  fi
 
   make -j$ncpu 
   make install
