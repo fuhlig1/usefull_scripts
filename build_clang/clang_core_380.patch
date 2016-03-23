@@ -56,3 +56,11 @@ index b7ac24f..ed77e80 100644
    // Optional AuxToolChain indicates that we need to include headers
    // for more than one target. If that's the case, add include paths
    // from AuxToolChain right after include paths of the same kind for
+--- tools/clang/tools/CMakeLists.txt
++++ tools/clang/tools/CMakeLists.txt
+@@ -26,3 +26,5 @@ endif()
+ # to keep the primary Clang repository small and focused.
+ # It also may be included by LLVM_EXTERNAL_CLANG_TOOLS_EXTRA_SOURCE_DIR.
+ add_llvm_external_project(clang-tools-extra extra)
++
++add_clang_subdirectory(include-what-you-use)

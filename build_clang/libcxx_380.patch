@@ -16,7 +16,7 @@
        endif()
      else()
 -      set(OSX_RE_EXPORT_LINE "/usr/lib/libc++abi.dylib -Wl,-reexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/libc++abi${LIBCXX_LIBCPPABI_VERSION}.exp")
-+      get_property(abiloc TARGET cxxabi PROPERTY LOCATION)
++      get_property(abiloc TARGET cxxabi_shared PROPERTY LOCATION)
 +      set(OSX_RE_EXPORT_LINE "-Wl,-reexport_library,${abiloc}")
      endif()
  
