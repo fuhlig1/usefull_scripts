@@ -1,5 +1,5 @@
---- tools/clang/tools/clang-tools-extra/clang-tidy/ClangTidy.cpp
-+++ tools/clang/tools/clang-tools-extra/clang-tidy/ClangTidy.cpp
+--- tools/clang/tools/extra/clang-tidy/ClangTidy.cpp
++++ tools/clang/tools/extra/clang-tidy/ClangTidy.cpp
 @@ -58,7 +58,7 @@ static const StringRef StaticAnalyzerChecks[] = {
  #define GET_CHECKERS
  #define CHECKER(FULLNAME, CLASS, DESCFILE, HELPTEXT, GROUPINDEX, HIDDEN)       \
