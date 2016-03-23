@@ -28,30 +28,25 @@ main() {
 
   check_architecture
   check_compiler
+
   bootstrap_settings
   if [ "$bootstrap" = "yes" ];
   then 
     download_llvm_core_git || exit
     build_pre_stage1 || exit
   fi
+
   stage1_settings
   download_llvm_core_git || exit
   download_llvm_addons_git || exit
-  exit
-  
   patch_llvm || exit
-
-#  exit
-    
+  
   build_stage1 || exit
-  set -xv
-#  exit
+
   stage2_settings
   build_stage2 || exit
-#exit
+
   build_oclint || exit
-  set +xv  
-  exit
 
   echo "To use clang as compiler you have to add the following lines to your environment"
   echo "##	#"
@@ -103,15 +98,10 @@ stage2_settings() {
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$InstDirBackup/$version_full
 
-#  cxxabi_include_path=$InstDir/include/cxxabi
-#  cxxabi_lib_path=$InstDir/lib
-
   cxxflags="-std=c++11 -stdlib=libc++ -O3" 
   ldflags="-Wl,-rpath,$InstDir/lib " 
 
   if [ "$arch" = "linux" ]; then
-#    export LD_LIBRARY_PATH=$tmpInstDir/lib:$LD_LIBRARY_PATH
-#    ldflags="$ldflags -lc++abi"
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
     if [ $count -eq 1 ]; then
       cIncDirs=$InstDir/include/c++/v1:/usr/include 
@@ -150,22 +140,17 @@ stage1_settings() {
   source_dir=$tmpDir/$version_full
   build_dir=$tmpDir/build/$version_full
 
-#  cxxabi_include_path=$source_dir/llvm/$version_full/projects/libcxxabi/include
-
   tmpInstDir=$tmpDir/compiler_tmp/llvm/$version_full
   InstDir=$tmpInstDir
 
   ldflags="-Wl,-rpath,$InstDir/lib"
   cmakeflags=""
   cxxflags=""
-#  cmakedebugflags="-debug --trace --debug-trycompile"
   cmakedugflags=""
   
   if [ "$arch" = "linux" ]; then
     cmakeflags="$cmakeflags -DLIBCXXABI_ENABLE_SHARED=off"
     cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11"
-#    cxxflags="$cxxflags -O3 -stdlib=libstdc++ -std=c++11 -lstdc++"
-#    ldflags="$ldflags -lstdc++"
     count=$(gcc -print-multiarch 2>&1 | grep -c unrecognized)
     if [ $count -eq 1 ]; then
       cIncDirs=$InstDir/include/c++/v1:/usr/include 
@@ -180,14 +165,11 @@ stage1_settings() {
   fi
 
   cmakeflags="$cmakeflags -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on"
-  # -DLIBCXX_CXX_ABI=libcxxabi-in-tree"   
-#  cmakeflags="$cmakeflags -DC_INCLUDE_DIRS=$cIncDirs -DBUILD_SHARED_LIBS=on"   
 
   if [ "$arch" = "darwin" ]; then
     cxxflags="-stdlib=libstdc++ -O3"
 
     cmakeflags="$cmakeflags -DLLVM_ENABLE_LIBCXX=TRUE -DCMAKE_OSX_ARCHITECTURES=x86_64;i386"
-#    cmakeflags="LIBCXXABI_LIBRARY_PATH=$cxxabi_lib_path -DLIBCXX_INSTALL_PATH=$InstDir/lib"   
   fi  
 }
 
@@ -435,7 +417,7 @@ download_llvm_addons() {
 download_llvm_addons_git() {
   cd $source_dir/llvm/$version/tools/clang/tools/
   if [ ! -d  extra ]; then
-    git clone https://github.com/llvm-mirror/clang-tools-extra extra
+    git clone https://github.com/llvm-mirror/clang-tools-extra extra 
     cd  $source_dir/llvm/$version/tools/clang/tools/extra
     git checkout release_$version    
   fi
@@ -463,19 +445,22 @@ build_llvm() {
   cmake $cmakedebugflags  $source_dir/llvm/$version \
     -DCMAKE_INSTALL_PREFIX=$InstDir \
     -DCMAKE_BUILD_TYPE=$cmake_build_type \
+    -DCMAKE_CXX_COMPILER=$cxx \
+    -DCMAKE_C_COMPILER=$cc \
+    -DLLVM_BUILD_EXTERNAL_COMPILER_RT=On \
     $cmakeflags
   set +xv
   
   # if building in parallel libc++ depends on libc++abi, so we have to build this first
-  if [ "$bootstrap" = "no" ]; then 
-    cd projects/libcxxabi
-    make -j$ncpu 
-    mkdir -p $InstDir
-    make install
-    mkdir -p $InstDir/include/cxxabi
-    cp -r $source_dir/llvm/$version/projects/libcxxabi/include/* $InstDir/include/cxxabi
-    cd ../..
-  fi
+#  if [ "$bootstrap" = "no" ]; then 
+#    cd projects/libcxxabi
+#    make -j$ncpu 
+#    mkdir -p $InstDir
+#    make install
+#    mkdir -p $InstDir/include/cxxabi
+#    cp -r $source_dir/llvm/$version/projects/libcxxabi/include/* $InstDir/include/cxxabi
+#    cd ../..
+#  fi
 
   make -j$ncpu 
   make install
@@ -508,14 +493,10 @@ build_stage1() {
 patch_llvm() {
   if [ ! -f $source_dir/llvm/$version/patched ]; then
     cd $source_dir/llvm/$version/
-    patch -p0 < $script_dir/llvm_core_$version.patch
-    patch -p0 < $script_dir/llvm_addons_$version.patch
-    if [ "$arch" = "darwin" ]; then
-      patch -p0 < $script_dir/llvm_libcxx_macosx_$version.patch
-      patch -p0 < $script_dir/libc++abi_$version.patch
-    else
-      patch -p0 < $script_dir/llvm_libcxx_linux_$version.patch
-    fi     
+    patch -p0 < $script_dir/clang_core_380.patch	
+    patch -p0 < $script_dir/libc++abi_380.patch	
+    patch -p0 < $script_dir/libcxx_380.patch
+    patch -p0 < $script_dir/clang_extra_380.patch
     touch $source_dir/llvm/$version/patched
   fi
 }
@@ -529,9 +510,9 @@ build_stage2() {
     cd $build_dir
   
     build_llvm 
-    mkdir -p $InstDir/bin     
-    cp -r $source_dir/llvm/$version/tools/clang/tools/scan-view $InstDir/bin
-    cp -r $source_dir/llvm/$version/tools/clang/tools/scan-build $InstDir/bin
+#    mkdir -p $InstDir/bin     
+#    cp -r $source_dir/llvm/$version/tools/clang/tools/scan-view $InstDir/bin
+#    cp -r $source_dir/llvm/$version/tools/clang/tools/scan-build $InstDir/bin
 
     # create symbolic links for cc and c++ 
     cd $InstDir/bin
@@ -553,7 +534,7 @@ build_oclint() {
     cd oclint
 #    git checkout 5dba3452a80a0531c9f58e967586b83684668ae2
     git checkout master      
-    patch -p0 < $script_dir/oclint_$version.patch
+#    patch -p0 < $script_dir/oclint_$version.patch
            
     if [ "$arch" = "linux" ];
     then
@@ -568,8 +549,10 @@ build_oclint() {
           -D CMAKE_C_COMPILER=$InstDir/bin/clang \
           -D LLVM_ROOT=$InstDir \
           $source_dir/oclint/oclint-core
-    make -j$ncpu
-  
+#    make -j$ncpu
+make
+    exit
+      
     cd $source_dir/oclint/build
     mkdir -p oclint-metrics
     cd oclint-metrics
