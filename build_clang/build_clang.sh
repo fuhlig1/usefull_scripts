@@ -401,10 +401,17 @@ download_llvm_addons() {
     svn co http://llvm.org/svn/llvm-project/clang-tools-extra/tags/RELEASE_$version/final extra
   fi
 
+  cd $source_dir/llvm/$version/tools/clang/tools/
   if [ ! -d  include-what-you-use ]; then
-    #TODO: maybe use branches or tags instead of trunk
-    svn co http://include-what-you-use.googlecode.com/svn/trunk include-what-you-use
+    git clone https://github.com/include-what-you-use/include-what-you-use
+    cd  $source_dir/llvm/$version/tools/clang/tools/include-what-you-use
+    git checkout clang_$version_full
   fi
+
+#  if [ ! -d  include-what-you-use ]; then
+#    #TODO: maybe use branches or tags instead of trunk
+#    svn co http://include-what-you-use.googlecode.com/svn/trunk include-what-you-use
+#  fi
 
   cd $source_dir/llvm/$version/projects
   if [ ! -d compiler-rt ]; then
