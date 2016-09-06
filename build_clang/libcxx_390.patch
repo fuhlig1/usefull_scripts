@@ -1,6 +1,8 @@
+diff --git a/lib/CMakeLists.txt b/lib/CMakeLists.txt
+index afc388e..f79f948 100644
 --- projects/libcxx/lib/CMakeLists.txt
 +++ projects/libcxx/lib/CMakeLists.txt
-@@ -95,8 +95,8 @@ if ( APPLE AND (LIBCXX_CXX_ABI_LIBNAME STREQUAL "libcxxabi" OR
+@@ -110,8 +110,8 @@ if ( APPLE AND (LIBCXX_CXX_ABI_LIBNAME STREQUAL "libcxxabi" OR
      add_link_flags(
        "-compatibility_version 1"
        "-current_version 1"
@@ -11,7 +13,7 @@
        "-Wl,-unexported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/libc++unexp.exp"
        "/usr/lib/libSystem.B.dylib")
    else()
-@@ -111,16 +111,18 @@ if ( APPLE AND (LIBCXX_CXX_ABI_LIBNAME STREQUAL "libcxxabi" OR
+@@ -126,16 +126,18 @@ if ( APPLE AND (LIBCXX_CXX_ABI_LIBNAME STREQUAL "libcxxabi" OR
            "-Wl,-reexport_library,${CMAKE_OSX_SYSROOT}/usr/lib/libc++abi.dylib")
        endif()
      else()
@@ -33,11 +35,11 @@
    endif()
  endif()
  
-@@ -135,6 +137,7 @@ set_target_properties(cxx
+@@ -150,6 +152,7 @@ set_target_properties(cxx
      OUTPUT_NAME   "c++"
      VERSION       "${LIBCXX_ABI_VERSION}.0"
      SOVERSION     "${LIBCXX_ABI_VERSION}"
 +    INSTALL_NAME_DIR "${CMAKE_INSTALL_PREFIX}/lib"
    )
  
- # Generate a linker script inplace of a libc++.so symlink. Rerun this command
+ if (LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY)

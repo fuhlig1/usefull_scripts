@@ -1,0 +1,70 @@
+diff --git a/lib/Driver/ToolChains.cpp b/lib/Driver/ToolChains.cpp
+index 347aa29..c824aff 100644
+--- tools/clang/lib/Driver/ToolChains.cpp
++++ tools/clang/lib/Driver/ToolChains.cpp
+@@ -3424,6 +3424,11 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
+                  const ArgList &Args)
+     : Generic_ELF(D, Triple, Args) {
+ 
++  // Fix FreeBSD builtin library search paths.
++  // Look in the prefix before going into /usr/lib. Otherwise we'll wind up
++  // with the wrong libc++.
++  getFilePaths().push_back(getDriver().Dir + "/../lib");
++
+   // When targeting 32-bit platforms, look for '/usr/lib32/crt1.o' and fall
+   // back to '/usr/lib' if it doesn't exist.
+   if ((Triple.getArch() == llvm::Triple::x86 ||
+@@ -3449,7 +3454,7 @@ void FreeBSD::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
+   switch (GetCXXStdlibType(DriverArgs)) {
+   case ToolChain::CST_Libcxx:
+     addSystemInclude(DriverArgs, CC1Args,
+-                     getDriver().SysRoot + "/usr/include/c++/v1");
++                     getDriver().Dir + "/../include/c++/v1");
+     break;
+   case ToolChain::CST_Libstdcxx:
+     addSystemInclude(DriverArgs, CC1Args,
+diff --git a/lib/Driver/Tools.cpp b/lib/Driver/Tools.cpp
+index 31d4360..ccd5b0f 100644
+--- tools/clang/lib/Driver/Tools.cpp
++++ tools/clang/lib/Driver/Tools.cpp
+@@ -272,6 +272,17 @@ static void AddLinkerInputs(const ToolChain &TC, const InputInfoList &Inputs,
+   //                and only supported on native toolchains.
+   if (!TC.isCrossCompiling())
+     addDirectoryList(Args, CmdArgs, "-L", "LIBRARY_PATH");
++
++  // Adding -L<prefix>/lib to default linker arguments.
++  // On Linux and FreeBSD, add -rpath.
++  if (!TC.isCrossCompiling()) {
++    CmdArgs.push_back(Args.MakeArgString("-L" + D.InstalledDir + "/../lib"));
++
++    auto os = TC.getTriple().getOS();
++    if (os == llvm::Triple::Linux || os == llvm::Triple::FreeBSD)
++      CmdArgs.push_back(Args.MakeArgString("-rpath=" + D.InstalledDir + "/../lib"));
++  }
++
+ }
+ 
+ /// \brief Determine whether Objective-C automated reference counting is
+@@ -599,6 +610,12 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
+   // OBJCPLUS_INCLUDE_PATH - system includes enabled when compiling ObjC++.
+   addDirectoryList(Args, CmdArgs, "-objcxx-isystem", "OBJCPLUS_INCLUDE_PATH");
+ 
++  // Adding $prefix/include to list of standard include paths.
++  if (!Args.hasArg(options::OPT_nostdlibinc)) {
++    CmdArgs.push_back("-internal-isystem");
++    CmdArgs.push_back(Args.MakeArgString(D.Dir + "/../include"));
++  }
++
+   // While adding the include arguments, we also attempt to retrieve the
+   // arguments of related offloading toolchains or arguments that are specific
+   // of an offloading programming model.
+diff --git a/tools/CMakeLists.txt b/tools/CMakeLists.txt
+index d734493..37231d3 100644
+--- tools/clang/tools/CMakeLists.txt
++++ tools/clang/tools/CMakeLists.txt
+@@ -28,3 +28,5 @@ add_llvm_external_project(clang-tools-extra extra)
+ 
+ # libclang may require clang-tidy in clang-tools-extra.
+ add_clang_subdirectory(libclang)
++
++add_clang_subdirectory(include-what-you-use)
